@@ -1,0 +1,31 @@
+/* カラー設定 */
+$green: #06c755;
+$white: white;
+$button-color: #007bff;
+$button-hovered-color: #0056b3;
+$bg: #f0f2f5;
+$header-bg: #ffffff;
+$border-color: #e0e0e0;
+$text-color: #333;
+$text-muted-color: #888;
+$danger-color: #d9534f;
+$text-light-color: #050505;
+
+/* サイズ設定 */
+$max-width: 600px;
+
+/* フォント設定 */
+$ff-code: 'Consolas', 'Courier New', 'monospace';
+
+/* モバイル用メディアクエリ */
+@mixin mobile {
+  @media screen and (max-width: 768px) {
+    @content;
+  }
+}
+
+/* ボタンアニメーション */
+@mixin buttonAnimation() {
+  transition: 0.2s ease;
+  cursor: pointer;
+}
