@@ -2,14 +2,14 @@ import { createStore } from 'vuex';
 
 export default createStore({
   state: {
-    password: null,
+    fileHandle: null,
   },
   getters: {
-    password: (state) => state.password,
+    fileHandle: (state) => state.fileHandle,
   },
   mutations: {
-    setPassword(state, value) {
-      state.password = value;
+    setFileHandle(state, fileHandle) {
+      state.fileHandle = fileHandle;
     },
   },
   actions: {

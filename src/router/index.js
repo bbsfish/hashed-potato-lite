@@ -1,7 +1,8 @@
 import { createRouter, createWebHistory } from 'vue-router';
 import HomeView from '@/views/HomeView.vue';
 import PasswordGeneratorView from '@/views/PasswordGeneratorView.vue';
-import SavePasswordView from '@/views/SavePasswordView.vue';
+import FileViewerView from '@/views/FileViewerView.vue';
+import FileEditorView from '@/views/FileEditorView.vue';
 
 const routes = [
   {
@@ -15,9 +16,14 @@ const routes = [
     component: PasswordGeneratorView,
   },
   {
-    path: '/savepass',
-    name: 'SavePassword',
-    component: SavePasswordView,
+    path: '/file-viewer',
+    name: 'FileViewer',
+    component: FileViewerView,
+  },
+  {
+    path: '/file-editor',
+    name: 'FileEditor',
+    component: FileEditorView,
   },
 ];
 

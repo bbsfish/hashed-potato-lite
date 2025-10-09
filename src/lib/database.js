@@ -4,12 +4,21 @@
  * @property {any} value - 値
  */
 
+/**
+ * @typedef {object} FileData
+ * @property {string} id - 一意のID
+ * @property {FileSystemFileHandle} handle - FileSystemAccess APIのファイルハンドル
+ * @property {string} name - ファイル名
+ * @property {Date} created_at - 作成日時
+ * @property {Date} updated_at - 更新日時
+ */
+
 class Database {
   /**
    * @param {string} dbName データベース名
    * @param {number} version データベースのバージョン
    */
-  constructor(dbName = 'webchat.db', version = 2) { // バージョンを2に更新
+  constructor(dbName = 'hashed-potato-lite.db', version = 1) {
     this.dbName = dbName;
     this.version = version;
     this.db = null;
@@ -30,17 +39,13 @@ class Database {
 
       request.onupgradeneeded = (event) => {
         const db = event.target.result;
-        // messages オブジェクトストア
-        if (!db.objectStoreNames.contains('messages')) {
-          db.createObjectStore('messages', { keyPath: 'id', autoIncrement: true });
-        }
-        // clients オブジェクトストア
-        if (!db.objectStoreNames.contains('clients')) {
-          db.createObjectStore('clients', { keyPath: 'id' });
-        }
         // state オブジェクトストア
         if (!db.objectStoreNames.contains('state')) {
           db.createObjectStore('state', { keyPath: 'key' });
+        }
+        // files オブジェクトストア (新規追加)
+        if (!db.objectStoreNames.contains('files')) {
+          db.createObjectStore('files', { keyPath: 'id' });
         }
       };
 
@@ -117,6 +122,99 @@ class Database {
    */
   async clearStates() {
     return this._execute('state', 'readwrite', store => store.clear());
+  }
+
+  // --- Files (新規追加) ---
+
+  /**
+   * すべてのファイルデータを取得する
+   * @returns {Promise<FileData[]>}
+   */
+  async getAllFiles() {
+    return this._execute('files', 'readonly', store => store.getAll());
+  }
+
+  /**
+   * 新しいファイルデータを追加する (IDの重複チェック付き)
+   * @param {string} id - 一意のID
+   * @param {FileSystemFileHandle} handle - ファイルハンドル
+   * @param {string} name - ファイル名
+   * @returns {Promise<string>} 追加されたデータのID
+   */
+  async addFile(id, handle, name) {
+    const db = await this.open();
+    return new Promise((resolve, reject) => {
+      const transaction = db.transaction('files', 'readwrite');
+      const store = transaction.objectStore('files');
+      const getRequest = store.get(id);
+
+      getRequest.onsuccess = () => {
+        if (getRequest.result) {
+          reject(new Error(`File with id "${id}" already exists.`));
+          transaction.abort();
+          return;
+        }
+
+        const now = new Date();
+        const newFile = { id, handle, name, created_at: now, updated_at: now };
+        const addRequest = store.add(newFile);
+        addRequest.onsuccess = () => resolve(addRequest.result);
+      };
+
+      transaction.onerror = () => reject(transaction.error);
+    });
+  }
+  
+  /**
+   * ファイルデータを更新する
+   * @param {string} id - 更新するデータのID
+   * @param {Partial<Pick<FileData, 'name' | 'handle'>>} updates - 更新する情報
+   * @returns {Promise<string>} 更新されたデータのID
+   */
+  async updateFile(id, updates) {
+    const db = await this.open();
+    return new Promise((resolve, reject) => {
+        const transaction = db.transaction('files', 'readwrite');
+        const store = transaction.objectStore('files');
+        const getRequest = store.get(id);
+
+        getRequest.onsuccess = () => {
+            const existingData = getRequest.result;
+            if (!existingData) {
+                reject(new Error(`File with id "${id}" not found.`));
+                transaction.abort();
+                return;
+            }
+
+            const updatedData = {
+                ...existingData,
+                ...updates,
+                updated_at: new Date(),
+            };
+
+            const putRequest = store.put(updatedData);
+            putRequest.onsuccess = () => resolve(putRequest.result);
+        };
+
+        transaction.onerror = () => reject(transaction.error);
+    });
+  }
+
+  /**
+   * 指定したIDのファイルデータを削除する
+   * @param {string} id - 削除するデータのID
+   * @returns {Promise<void>}
+   */
+  async deleteFile(id) {
+    return this._execute('files', 'readwrite', store => store.delete(id));
+  }
+
+  /**
+   * すべてのファイルデータを削除する
+   * @returns {Promise<void>}
+   */
+  async clearFiles() {
+    return this._execute('files', 'readwrite', store => store.clear());
   }
 }
 
