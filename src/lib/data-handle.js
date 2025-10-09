@@ -18,6 +18,7 @@ class DataHandle {
       ignoreAttributes: false,
       attributeNamePrefix: '@_',
       format: true,
+      suppressEmptyNode: true,
     });
     this.jsonData = null;
   }
@@ -103,7 +104,6 @@ class DataHandle {
   createTable(tableName, encryptionEnabled = false) {
     if (!this.jsonData) return null;
 
-    // table_dataが配列であることを保証する
     if (!this.jsonData.root.body.tables) {
         this.jsonData.root.body.tables = { table_data: [] };
     } else if (!Array.isArray(this.jsonData.root.body.tables.table_data)) {
@@ -113,6 +113,13 @@ class DataHandle {
     const now = new Date().toISOString();
     const tableId = `TBL-${String(Math.floor(Math.random() * 9000) + 1000)}`;
 
+    const defaultColumnOrder = [
+        'serial_number', 'service_name', 'user_id', 'website_url',
+        'email_count', 'password_count', 'note',
+        'status', 'category', 'service_name_initial',
+        'service_description', 'created_at', 'updated_at'
+    ];
+
     const newTable = {
       thead: {
         table_name: tableName,
@@ -120,6 +127,7 @@ class DataHandle {
         created_at: now,
         updated_at: now,
         encryption_enabled: encryptionEnabled,
+        column_order: { col: defaultColumnOrder }, // 列順を保存
       },
       tbody: {
         accounts: { account_data: [] },
@@ -136,12 +144,17 @@ class DataHandle {
   /**
    * テーブルを更新する
    * @param {string} tableId - 更新するテーブルのID
-   * @param {object} updates - 更新する情報（例: { table_name: '新しい名前' }）
+   * @param {object} updates - 更新する情報
    * @returns {boolean} 成功した場合はtrue、失敗した場合はfalse
    */
   updateTable(tableId, updates) {
     const table = this._findTable(tableId);
     if (!table) return false;
+    
+    // updatesにcolumn_orderが含まれている場合、適切にラップする
+    if (updates.column_order && Array.isArray(updates.column_order)) {
+      updates.column_order = { col: updates.column_order };
+    }
 
     Object.assign(table.thead, updates);
     table.thead.updated_at = new Date().toISOString();
@@ -176,7 +189,6 @@ class DataHandle {
     const table = this._findTable(tableId);
     if (!table) return null;
 
-    // Defensive checks to ensure the data structure exists
     if (!table.tbody) {
         table.tbody = { accounts: { account_data: [] }, emails: { email_data: [] }, passwords: { password_data: [] } };
     }
@@ -239,7 +251,6 @@ class DataHandle {
 
     accounts.splice(index, 1);
 
-    // 関連するemailとpasswordも削除
     this.updateEmailsForAccount(tableId, serialNumber, []);
     this.updatePasswordsForAccount(tableId, serialNumber, []);
 
@@ -259,14 +270,11 @@ class DataHandle {
       const table = this._findTable(tableId);
       if (!table) return false;
 
-      // Ensure data structure exists
       if (!table.tbody.emails) table.tbody.emails = { email_data: [] };
       if (!Array.isArray(table.tbody.emails.email_data)) table.tbody.emails.email_data = [];
 
-      // 既存のメールデータをフィルタリング
       const otherEmails = table.tbody.emails.email_data.filter(e => e.serial_number !== serialNumber);
       
-      // 新しいメールデータにシリアルナンバーを付与
       const updatedEmails = emails.map(e => ({ ...e, serial_number: serialNumber }));
 
       table.tbody.emails.email_data = [...otherEmails, ...updatedEmails];
@@ -285,7 +293,6 @@ class DataHandle {
       const table = this._findTable(tableId);
       if (!table) return false;
       
-      // Ensure data structure exists
       if (!table.tbody.passwords) table.tbody.passwords = { password_data: [] };
       if (!Array.isArray(table.tbody.passwords.password_data)) table.tbody.passwords.password_data = [];
 
@@ -295,7 +302,6 @@ class DataHandle {
       const updatedPasswords = passwords.map(p => ({
           ...p,
           serial_number: serialNumber,
-          // 既存のデータでなければ作成・更新日時を追加
           created_at: p.created_at || now,
           updated_at: now,
       }));
@@ -313,8 +319,7 @@ class DataHandle {
    * @returns {object|undefined} 見つかったテーブルオブジェクト
    */
   _findTable(tableId) {
-    if (!this.jsonData) return undefined;
-    if (!this.jsonData.root.body.tables.table_data) return undefined;
+    if (!this.jsonData || !this.jsonData.root?.body?.tables?.table_data) return undefined;
     return this.jsonData.root.body.tables.table_data.find(
       t => t.thead.table_id === tableId
     );
@@ -329,7 +334,7 @@ class DataHandle {
    */
   _findAccount(tableId, serialNumber) {
     const table = this._findTable(tableId);
-    if (!table || !table.tbody || !table.tbody.accounts || !table.tbody.accounts.account_data) return undefined;
+    if (!table || !table.tbody?.accounts?.account_data) return undefined;
     return table.tbody.accounts.account_data.find(
       a => a.serial_number === serialNumber
     );

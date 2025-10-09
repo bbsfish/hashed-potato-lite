@@ -39,11 +39,9 @@ class Database {
 
       request.onupgradeneeded = (event) => {
         const db = event.target.result;
-        // state オブジェクトストア
         if (!db.objectStoreNames.contains('state')) {
           db.createObjectStore('state', { keyPath: 'key' });
         }
-        // files オブジェクトストア (新規追加)
         if (!db.objectStoreNames.contains('files')) {
           db.createObjectStore('files', { keyPath: 'id' });
         }
@@ -64,10 +62,6 @@ class Database {
   /**
    * 指定されたオブジェクトストアでトランザクションを実行する
    * @private
-   * @param {string} storeName オブジェクトストア名
-   * @param {'readonly' | 'readwrite'} mode トランザクションモード
-   * @param {(store: IDBObjectStore) => IDBRequest} callback 実行する処理
-   * @returns {Promise<any>} 処理結果
    */
   async _execute(storeName, mode, callback) {
     const db = await this.open();
@@ -88,59 +82,38 @@ class Database {
 
   // --- State ---
 
-  /**
-   * アプリケーションの状態を保存/更新する
-   * @param {string} key - 状態のキー
-   * @param {any} value - 保存する値
-   * @returns {Promise<void>}
-   */
   async setState(key, value) {
     return this._execute('state', 'readwrite', store => store.put({ key, value }));
   }
 
-  /**
-   * アプリケーションの状態を取得する
-   * @param {string} key - 状態のキー
-   * @returns {Promise<any | undefined>} 状態の値
-   */
   async getState(key) {
     const result = await this._execute('state', 'readonly', store => store.get(key));
     return result ? result.value : undefined;
   }
 
-  /**
-   * stateストアのすべてのキーを取得する
-   * @returns {Promise<IDBValidKey[]>}
-   */
   async getKeys() {
     return this._execute('state', 'readonly', store => store.getAllKeys());
   }
 
-  /**
-   * stateストアのすべてのデータを削除する
-   * @returns {Promise<void>}
-   */
   async clearStates() {
     return this._execute('state', 'readwrite', store => store.clear());
   }
 
-  // --- Files (新規追加) ---
+  // --- Files ---
 
-  /**
-   * すべてのファイルデータを取得する
-   * @returns {Promise<FileData[]>}
-   */
   async getAllFiles() {
     return this._execute('files', 'readonly', store => store.getAll());
   }
-
+  
   /**
-   * 新しいファイルデータを追加する (IDの重複チェック付き)
-   * @param {string} id - 一意のID
-   * @param {FileSystemFileHandle} handle - ファイルハンドル
-   * @param {string} name - ファイル名
-   * @returns {Promise<string>} 追加されたデータのID
+   * IDで単一のファイルデータを取得する
+   * @param {string} id - 取得するデータのID
+   * @returns {Promise<FileData|undefined>}
    */
+  async getFile(id) {
+    return this._execute('files', 'readonly', store => store.get(id));
+  }
+
   async addFile(id, handle, name) {
     const db = await this.open();
     return new Promise((resolve, reject) => {
@@ -165,12 +138,6 @@ class Database {
     });
   }
   
-  /**
-   * ファイルデータを更新する
-   * @param {string} id - 更新するデータのID
-   * @param {Partial<Pick<FileData, 'name' | 'handle'>>} updates - 更新する情報
-   * @returns {Promise<string>} 更新されたデータのID
-   */
   async updateFile(id, updates) {
     const db = await this.open();
     return new Promise((resolve, reject) => {
@@ -200,19 +167,10 @@ class Database {
     });
   }
 
-  /**
-   * 指定したIDのファイルデータを削除する
-   * @param {string} id - 削除するデータのID
-   * @returns {Promise<void>}
-   */
   async deleteFile(id) {
     return this._execute('files', 'readwrite', store => store.delete(id));
   }
 
-  /**
-   * すべてのファイルデータを削除する
-   * @returns {Promise<void>}
-   */
   async clearFiles() {
     return this._execute('files', 'readwrite', store => store.clear());
   }
