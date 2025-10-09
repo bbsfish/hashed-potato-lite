@@ -6,17 +6,72 @@
         <button @click="close" class="close-btn">&times;</button>
       </div>
       <div class="modal-body">
-        <form @submit.prevent="save" class="editor-form">
-          <div v-for="(value, key) in localAccountData" :key="key" class="form-group">
-            <label :for="key">{{ key }}</label>
-            <input
-              :id="key"
-              v-model="localAccountData[key]"
-              :disabled="key === 'serial_number' || key === 'created_at' || key === 'updated_at'"
-              type="text"
-            />
-          </div>
-        </form>
+        <section class="form-section">
+            <h3>基本情報</h3>
+            <form @submit.prevent="save" class="editor-form">
+            <div v-for="(value, key) in localAccountData" :key="key" class="form-group">
+                <label :for="`account-${key}`">{{ key }}</label>
+                <input
+                :id="`account-${key}`"
+                v-model="localAccountData[key]"
+                :disabled="key === 'serial_number' || key === 'created_at' || key === 'updated_at'"
+                type="text"
+                />
+            </div>
+            </form>
+        </section>
+
+        <section class="form-section">
+            <div class="sub-header">
+                <h3>メールアドレス</h3>
+                <button @click="addEmail" class="btn-add">+</button>
+            </div>
+            <div v-for="(email, index) in localEmailData" :key="index" class="sub-form-group">
+                <div class="form-group">
+                    <label>メールアドレス</label>
+                    <input type="email" v-model="email.mail_address">
+                </div>
+                <div class="form-group">
+                    <label>ユーザーID</label>
+                    <input type="text" v-model="email.user_id">
+                </div>
+                <div class="form-group">
+                    <label>概要</label>
+                    <input type="text" v-model="email.summary">
+                </div>
+                <div class="form-group">
+                    <label>ノート</label>
+                    <textarea v-model="email.note"></textarea>
+                </div>
+                <button @click="removeEmail(index)" class="btn-remove">削除</button>
+            </div>
+        </section>
+
+        <section class="form-section">
+            <div class="sub-header">
+                <h3>パスワード</h3>
+                <button @click="addPassword" class="btn-add">+</button>
+            </div>
+            <div v-for="(password, index) in localPasswordData" :key="index" class="sub-form-group">
+                 <div class="form-group">
+                    <label>パスワード</label>
+                    <input type="text" v-model="password.password">
+                </div>
+                <div class="form-group">
+                    <label>ユーザーID</label>
+                    <input type="text" v-model="password.user_id">
+                </div>
+                <div class="form-group">
+                    <label>概要</label>
+                    <input type="text" v-model="password.summary">
+                </div>
+                <div class="form-group">
+                    <label>ノート</label>
+                    <textarea v-model="password.note"></textarea>
+                </div>
+                <button @click="removePassword(index)" class="btn-remove">削除</button>
+            </div>
+        </section>
       </div>
       <div class="modal-footer">
         <button @click="close" class="btn-cancel">閉じる</button>
@@ -34,12 +89,21 @@ export default {
       type: Object,
       required: true,
     },
+    emailData: {
+        type: Array,
+        default: () => [],
+    },
+    passwordData: {
+        type: Array,
+        default: () => [],
+    }
   },
   emits: ['close', 'save'],
   data() {
     return {
-      // 編集用にデータをローカルにコピー
       localAccountData: JSON.parse(JSON.stringify(this.accountData)),
+      localEmailData: JSON.parse(JSON.stringify(this.emailData)),
+      localPasswordData: JSON.parse(JSON.stringify(this.passwordData)),
     };
   },
   methods: {
@@ -47,14 +111,44 @@ export default {
       this.$emit('close');
     },
     save() {
-      // 変更されたデータを親に渡す
-      this.$emit('save', this.localAccountData);
+      this.$emit('save', {
+          account: this.localAccountData,
+          emails: this.localEmailData,
+          passwords: this.localPasswordData,
+      });
     },
+    addEmail() {
+        this.localEmailData.push({
+            mail_address: '',
+            user_id: '',
+            summary: '',
+            note: '',
+        });
+    },
+    removeEmail(index) {
+        this.localEmailData.splice(index, 1);
+    },
+    addPassword() {
+        this.localPasswordData.push({
+            password: '',
+            user_id: '',
+            summary: '',
+            note: '',
+        });
+    },
+    removePassword(index) {
+        this.localPasswordData.splice(index, 1);
+    }
   },
   watch: {
-    // 親コンポーネントから渡されるデータが変更されたら、ローカルデータも更新
     accountData(newData) {
       this.localAccountData = JSON.parse(JSON.stringify(newData));
+    },
+    emailData(newData) {
+      this.localEmailData = JSON.parse(JSON.stringify(newData));
+    },
+    passwordData(newData) {
+      this.localPasswordData = JSON.parse(JSON.stringify(newData));
     }
   }
 };
@@ -79,7 +173,7 @@ export default {
   border-radius: 8px;
   box-shadow: 0 5px 15px rgba(0,0,0,0.3);
   width: 90%;
-  max-width: 600px;
+  max-width: 700px;
   display: flex;
   flex-direction: column;
 }
@@ -106,14 +200,24 @@ export default {
 }
 
 .modal-body {
-  padding: 1.5rem;
+  padding: 0 1.5rem;
   overflow-y: auto;
-  max-height: 70vh;
+  max-height: 75vh;
+}
+
+.form-section {
+    margin: 1.5rem 0;
+    h3 {
+        margin-top: 0;
+        margin-bottom: 1rem;
+        border-bottom: 1px solid #eee;
+        padding-bottom: 0.5rem;
+    }
 }
 
 .editor-form {
-  display: flex;
-  flex-direction: column;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
   gap: 1rem;
 }
 
@@ -128,18 +232,59 @@ export default {
     color: #555;
   }
 
-  input {
+  input, textarea {
     padding: 0.75rem;
     border: 1px solid #ccc;
     border-radius: 4px;
     font-size: 1rem;
+    width: 100%;
+    box-sizing: border-box;
 
     &:disabled {
         background-color: #f0f0f0;
         cursor: not-allowed;
     }
   }
+  textarea {
+      min-height: 80px;
+      resize: vertical;
+  }
 }
+
+.sub-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    .btn-add {
+        border-radius: 50%;
+        width: 28px;
+        height: 28px;
+        border: 1px solid #28a745;
+        background-color: #28a745;
+        color: white;
+        font-size: 1.2rem;
+        cursor: pointer;
+    }
+}
+.sub-form-group {
+    border: 1px solid #e0e0e0;
+    border-radius: 4px;
+    padding: 1rem;
+    margin-bottom: 1rem;
+    position: relative;
+    .btn-remove {
+        position: absolute;
+        top: 0.5rem;
+        right: 0.5rem;
+        background: #d9534f;
+        color: white;
+        border: none;
+        padding: 0.25rem 0.75rem;
+        border-radius: 4px;
+        cursor: pointer;
+    }
+}
+
 
 .modal-footer {
   padding: 1rem 1.5rem;

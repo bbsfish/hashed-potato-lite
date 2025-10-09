@@ -67,10 +67,12 @@
     </div>
 
     <FileDataEditor
-      v-if="isEditorVisible && editingAccount"
+      v-if="isEditorVisible"
       :account-data="editingAccount"
+      :email-data="editingEmails"
+      :password-data="editingPasswords"
       @close="closeEditor"
-      @save="saveAccount"
+      @save="saveAccountDetails"
     />
   </div>
 </template>
@@ -98,6 +100,8 @@ export default {
       isDataChanged: false,
       isEditorVisible: false,
       editingAccount: null,
+      editingEmails: [],
+      editingPasswords: [],
     };
   },
   computed: {
@@ -228,6 +232,7 @@ export default {
         this.tableData = null;
         this.selectedTableId = null;
         this.isDataChanged = false;
+        this.closeEditor();
     },
     async saveFile(forceSave = false, handle = this.fileHandle) {
         if (!handle) return;
@@ -296,17 +301,35 @@ export default {
 
     // --- 編集フォーム ---
     selectAccount(account) {
-        // 編集用にデータのコピーを作成
         this.editingAccount = JSON.parse(JSON.stringify(account));
+
+        const table = this.selectedTable;
+        if (table && table.tbody) {
+            this.editingEmails = JSON.parse(JSON.stringify(
+                table.tbody.emails?.email_data?.filter(e => e.serial_number === account.serial_number) || []
+            ));
+            this.editingPasswords = JSON.parse(JSON.stringify(
+                table.tbody.passwords?.password_data?.filter(p => p.serial_number === account.serial_number) || []
+            ));
+        }
+
         this.isEditorVisible = true;
     },
     closeEditor() {
         this.isEditorVisible = false;
         this.editingAccount = null;
+        this.editingEmails = [];
+        this.editingPasswords = [];
     },
-    saveAccount(updatedAccount) {
-        const success = this.dataHandler.updateAccount(this.selectedTableId, updatedAccount.serial_number, updatedAccount);
-        if (success) {
+    saveAccountDetails({ account, emails, passwords }) {
+        // アカウント情報の更新
+        const accountSuccess = this.dataHandler.updateAccount(this.selectedTableId, account.serial_number, account);
+        
+        // Eメールとパスワードの更新
+        const emailsSuccess = this.dataHandler.updateEmailsForAccount(this.selectedTableId, account.serial_number, emails);
+        const passwordsSuccess = this.dataHandler.updatePasswordsForAccount(this.selectedTableId, account.serial_number, passwords);
+
+        if (accountSuccess && emailsSuccess && passwordsSuccess) {
             this.isDataChanged = true;
         }
         this.closeEditor();

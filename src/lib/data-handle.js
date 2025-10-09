@@ -240,47 +240,69 @@ class DataHandle {
     accounts.splice(index, 1);
 
     // 関連するemailとpasswordも削除
-    table.tbody.emails.email_data = table.tbody.emails.email_data.filter(e => e.serial_number !== serialNumber);
-    table.tbody.passwords.password_data = table.tbody.passwords.password_data.filter(p => p.serial_number !== serialNumber);
+    this.updateEmailsForAccount(tableId, serialNumber, []);
+    this.updatePasswordsForAccount(tableId, serialNumber, []);
 
     table.thead.updated_at = new Date().toISOString();
     this._updateTimestamps();
     return true;
   }
 
-  // 同様に、createEmail, updateEmail, deleteEmail, createPassword, updatePassword, deletePassword を実装
   /**
-   * メールアドレスデータを追加する
-   * @param {string} tableId - テーブルID
-   * @param {object} emailData - 追加するメールアドレスデータ
+   * 特定のアカウントに関連するすべてのメールアドレスを更新する
+   * @param {string} tableId
+   * @param {number} serialNumber
+   * @param {Array<object>} emails
    * @returns {boolean}
    */
-  createEmail(tableId, emailData) {
-    const table = this._findTable(tableId);
-    if (!table) return false;
-    table.tbody.emails.email_data.push(emailData);
-    this._updateTimestamps();
-    return true;
+  updateEmailsForAccount(tableId, serialNumber, emails) {
+      const table = this._findTable(tableId);
+      if (!table) return false;
+
+      // Ensure data structure exists
+      if (!table.tbody.emails) table.tbody.emails = { email_data: [] };
+      if (!Array.isArray(table.tbody.emails.email_data)) table.tbody.emails.email_data = [];
+
+      // 既存のメールデータをフィルタリング
+      const otherEmails = table.tbody.emails.email_data.filter(e => e.serial_number !== serialNumber);
+      
+      // 新しいメールデータにシリアルナンバーを付与
+      const updatedEmails = emails.map(e => ({ ...e, serial_number: serialNumber }));
+
+      table.tbody.emails.email_data = [...otherEmails, ...updatedEmails];
+      this._updateTimestamps();
+      return true;
   }
 
   /**
-   * パスワードデータを追加する
-   * @param {string} tableId - テーブルID
-   * @param {object} passwordData - 追加するパスワードデータ
+   * 特定のアカウントに関連するすべてのパスワードを更新する
+   * @param {string} tableId
+   * @param {number} serialNumber
+   * @param {Array<object>} passwords
    * @returns {boolean}
    */
-  createPassword(tableId, passwordData) {
-    const table = this._findTable(tableId);
-    if (!table) return false;
-    const now = new Date().toISOString();
-    const newPassword = {
-      ...passwordData,
-      created_at: now,
-      updated_at: now,
-    };
-    table.tbody.passwords.password_data.push(newPassword);
-    this._updateTimestamps();
-    return true;
+  updatePasswordsForAccount(tableId, serialNumber, passwords) {
+      const table = this._findTable(tableId);
+      if (!table) return false;
+      
+      // Ensure data structure exists
+      if (!table.tbody.passwords) table.tbody.passwords = { password_data: [] };
+      if (!Array.isArray(table.tbody.passwords.password_data)) table.tbody.passwords.password_data = [];
+
+      const otherPasswords = table.tbody.passwords.password_data.filter(p => p.serial_number !== serialNumber);
+
+      const now = new Date().toISOString();
+      const updatedPasswords = passwords.map(p => ({
+          ...p,
+          serial_number: serialNumber,
+          // 既存のデータでなければ作成・更新日時を追加
+          created_at: p.created_at || now,
+          updated_at: now,
+      }));
+
+      table.tbody.passwords.password_data = [...otherPasswords, ...updatedPasswords];
+      this._updateTimestamps();
+      return true;
   }
 
 
