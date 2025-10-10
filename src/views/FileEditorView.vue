@@ -81,7 +81,7 @@
       :account-data="editingAccount"
       :email-data="editingEmails"
       :password-data="editingPasswords"
-      @close="closeEditor"
+      :column-aliases="columnAliases" @close="closeEditor"
       @save="saveAccountDetails"
     />
   </div>

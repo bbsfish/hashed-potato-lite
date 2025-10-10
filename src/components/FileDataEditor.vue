@@ -2,7 +2,7 @@
   <div class="file-data-editor-overlay" @click.self="close">
     <div class="editor-modal">
       <div class="modal-header">
-        <h2>アカウント情報の編集</h2>
+        <h2>{{ title }}</h2>
         <button @click="close" class="close-btn">&times;</button>
       </div>
       <div class="modal-body">
@@ -10,13 +10,20 @@
             <h3>基本情報</h3>
             <form @submit.prevent="save" class="editor-form">
             <div v-for="(value, key) in localAccountData" :key="key" class="form-group">
-                <label :for="`account-${key}`">{{ key }}</label>
-                <input
-                :id="`account-${key}`"
-                v-model="localAccountData[key]"
-                :disabled="key === 'serial_number' || key === 'created_at' || key === 'updated_at'"
-                type="text"
-                />
+                <label :for="`account-${key}`">{{ getColumnAlias(key) }}</label>
+                 <div class="input-wrapper">
+                    <input
+                    :id="`account-${key}`"
+                    v-model="localAccountData[key]"
+                    :disabled="isFieldDisabled(key)"
+                    type="text"
+                    />
+                    <IconClipboard 
+                        v-if="isFieldDisabled(key) && !readonly" 
+                        @click="copyToClipboard(localAccountData[key])"
+                        class="copy-icon"
+                    />
+                 </div>
             </div>
             </form>
         </section>
@@ -24,67 +31,80 @@
         <section class="form-section">
             <div class="sub-header">
                 <h3>メールアドレス</h3>
-                <button @click="addEmail" class="btn-add">+</button>
+                <button v-if="!readonly" @click="addEmail" class="btn-add">+</button>
             </div>
             <div v-for="(email, index) in localEmailData" :key="index" class="sub-form-group">
                 <div class="form-group">
                     <label>メールアドレス</label>
-                    <input type="email" v-model="email.mail_address">
+                    <input type="email" v-model="email.mail_address" :disabled="readonly">
                 </div>
                 <div class="form-group">
                     <label>ユーザーID</label>
-                    <input type="text" v-model="email.user_id">
+                    <input type="text" v-model="email.user_id" :disabled="readonly">
                 </div>
                 <div class="form-group">
                     <label>概要</label>
-                    <input type="text" v-model="email.summary">
+                    <input type="text" v-model="email.summary" :disabled="readonly">
                 </div>
                 <div class="form-group">
                     <label>ノート</label>
-                    <textarea v-model="email.note"></textarea>
+                    <textarea v-model="email.note" :disabled="readonly"></textarea>
                 </div>
-                <button @click="removeEmail(index)" class="btn-remove">削除</button>
+                <button v-if="!readonly" @click="removeEmail(index)" class="btn-remove">削除</button>
             </div>
         </section>
 
         <section class="form-section">
             <div class="sub-header">
                 <h3>パスワード</h3>
-                <button @click="addPassword" class="btn-add">+</button>
+                <button v-if="!readonly" @click="addPassword" class="btn-add">+</button>
             </div>
             <div v-for="(password, index) in localPasswordData" :key="index" class="sub-form-group">
                  <div class="form-group">
                     <label>パスワード</label>
-                    <input type="text" v-model="password.password">
+                    <input type="text" v-model="password.password" :disabled="readonly">
                 </div>
                 <div class="form-group">
                     <label>ユーザーID</label>
-                    <input type="text" v-model="password.user_id">
+                    <input type="text" v-model="password.user_id" :disabled="readonly">
                 </div>
                 <div class="form-group">
                     <label>概要</label>
-                    <input type="text" v-model="password.summary">
+                    <input type="text" v-model="password.summary" :disabled="readonly">
                 </div>
                 <div class="form-group">
                     <label>ノート</label>
-                    <textarea v-model="password.note"></textarea>
+                    <textarea v-model="password.note" :disabled="readonly"></textarea>
                 </div>
-                <button @click="removePassword(index)" class="btn-remove">削除</button>
+                <button v-if="!readonly" @click="removePassword(index)" class="btn-remove">削除</button>
             </div>
         </section>
       </div>
       <div class="modal-footer">
         <button @click="close" class="btn-cancel">閉じる</button>
-        <button @click="save" class="btn-save">保存</button>
+        <button v-if="!readonly" @click="save" class="btn-save">保存</button>
       </div>
     </div>
   </div>
 </template>
 
 <script>
+import IconClipboard from './icons/IconClipboard.vue';
+
 export default {
   name: 'FileDataEditor',
+  components: {
+    IconClipboard,
+  },
   props: {
+    title: {
+      type: String,
+      default: 'アカウント情報の編集'
+    },
+    readonly: {
+      type: Boolean,
+      default: false,
+    },
     accountData: {
       type: Object,
       required: true,
@@ -96,6 +116,10 @@ export default {
     passwordData: {
         type: Array,
         default: () => [],
+    },
+    columnAliases: {
+      type: Object,
+      default: () => ({}),
     }
   },
   emits: ['close', 'save'],
@@ -107,6 +131,21 @@ export default {
     };
   },
   methods: {
+    getColumnAlias(key) {
+        return this.columnAliases[key] || key;
+    },
+    isFieldDisabled(key) {
+        return this.readonly || key === 'serial_number' || key === 'created_at' || key === 'updated_at';
+    },
+    async copyToClipboard(text) {
+      try {
+        await navigator.clipboard.writeText(text);
+        this.$dialog.alert('クリップボードにコピーしました。');
+      } catch (err) {
+        this.$dialog.alert('コピーに失敗しました。');
+        console.error('Failed to copy: ', err);
+      }
+    },
     close() {
       this.$emit('close');
     },
@@ -230,6 +269,18 @@ export default {
     font-weight: bold;
     font-size: 0.9rem;
     color: #555;
+  }
+
+  .input-wrapper {
+      position: relative;
+      display: flex;
+      align-items: center;
+      .copy-icon {
+          position: absolute;
+          right: 10px;
+          cursor: pointer;
+          color: #888;
+      }
   }
 
   input, textarea {
