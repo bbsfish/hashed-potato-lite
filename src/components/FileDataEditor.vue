@@ -9,22 +9,26 @@
         <section class="form-section">
             <h3>基本情報</h3>
             <form @submit.prevent="save" class="editor-form">
-            <div v-for="(value, key) in localAccountData" :key="key" class="form-group">
-                <label :for="`account-${key}`">{{ getColumnAlias(key) }}</label>
-                 <div class="input-wrapper">
-                    <input
-                    :id="`account-${key}`"
-                    v-model="localAccountData[key]"
-                    :disabled="isFieldDisabled(key)"
-                    type="text"
-                    />
-                    <IconClipboard
-                        v-if="isFieldDisabled(key) && !readonly"
-                        @click="copyToClipboard(localAccountData[key])"
-                        class="copy-icon"
-                    />
-                 </div>
-            </div>
+              <div v-for="(value, key) in localAccountData" :key="key" class="form-group">
+                  <label :for="`account-${key}`">{{ getColumnAlias(key) }}</label>
+                  <div class="input-wrapper">
+                      <input
+                        :id="`account-${key}`"
+                        v-model="localAccountData[key]"
+                        :disabled="isFieldDisabled(key)"
+                        type="text"
+                        :list="datalistId(key)"
+                      />
+                      <datalist v-if="datalistId(key)" :id="datalistId(key)">
+                        <option v-for="option in suggestionOptions[key]" :key="option" :value="option" />
+                      </datalist>
+                      <IconClipboard
+                          v-if="isFieldDisabled(key) && !readonly"
+                          @click="copyToClipboard(localAccountData[key])"
+                          class="copy-icon"
+                      />
+                  </div>
+              </div>
             </form>
         </section>
 
@@ -36,7 +40,10 @@
             <div v-for="(email, index) in localEmailData" :key="index" class="sub-form-group">
                 <div class="form-group">
                     <label>メールアドレス</label>
-                    <input type="email" v-model="email.mail_address" :disabled="readonly">
+                    <input type="email" v-model="email.mail_address" :disabled="readonly" list="mail-address-list">
+                    <datalist id="mail-address-list">
+                        <option v-for="addr in suggestionOptions.mail_address" :key="addr" :value="addr" />
+                    </datalist>
                 </div>
                 <div class="form-group">
                     <label>概要</label>
@@ -112,7 +119,12 @@ export default {
     columnAliases: {
       type: Object,
       default: () => ({}),
-    }
+    },
+    // テーブル全体のデータをプロパティとして受け取る
+    allTableData: {
+      type: Object,
+      default: () => null,
+    },
   },
   emits: ['close', 'save'],
   data() {
@@ -120,7 +132,37 @@ export default {
       localAccountData: JSON.parse(JSON.stringify(this.accountData)),
       localEmailData: JSON.parse(JSON.stringify(this.emailData)),
       localPasswordData: JSON.parse(JSON.stringify(this.passwordData)),
+      // サジェスト機能を持たせるフィールドのリスト
+      suggestibleFields: ['category', 'status', 'user_id', 'service_name_initial'],
     };
+  },
+  computed: {
+    /**
+     * allTableDataからサジェスト用のユニークな値のリストを生成する
+     */
+    suggestionOptions() {
+      if (!this.allTableData || !this.allTableData.tbody) {
+        return {};
+      }
+
+      const accounts = this.allTableData.tbody.accounts?.account_data || [];
+      const emails = this.allTableData.tbody.emails?.email_data || [];
+
+      // 指定されたキーのユニークな値の配列を返すヘルパー関数
+      const getUniqueValues = (key, data) => {
+        return [...new Set(data.map(item => item[key]).filter(Boolean))];
+      };
+      
+      const options = {
+        mail_address: getUniqueValues('mail_address', emails),
+      };
+
+      this.suggestibleFields.forEach(field => {
+        options[field] = getUniqueValues(field, accounts);
+      });
+
+      return options;
+    }
   },
   methods: {
     getColumnAlias(key) {
@@ -128,6 +170,15 @@ export default {
     },
     isFieldDisabled(key) {
         return this.readonly || key === 'serial_number' || key === 'created_at' || key === 'updated_at';
+    },
+    /**
+     * サジェスト機能を持つフィールドに対応するdatalistのIDを返す
+     */
+    datalistId(key) {
+      if (this.suggestibleFields.includes(key)) {
+        return `${key}-list`;
+      }
+      return null;
     },
     async copyToClipboard(text) {
       try {

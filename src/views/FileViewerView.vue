@@ -79,15 +79,16 @@
       <p v-else class="no-data-message">表示できるデータがありません。</p>
     </div>
 
-     <FileDataEditor
-      v-if="isDetailVisible"
-      title="アカウント情報の詳細"
-      :account-data="selectedAccount"
-      :email-data="selectedEmails"
-      :password-data="selectedPasswords"
-      :readonly="true"
-      :column-aliases="columnAliases" @close="isDetailVisible = false"
-    />
+<FileDataEditor
+  v-if="isDetailVisible"
+  title="アカウント情報の詳細"
+  :account-data="selectedAccount"
+  :email-data="selectedEmails"
+  :password-data="selectedPasswords"
+  :readonly="true"
+  :column-aliases="columnAliases"
+  :all-table-data="selectedTable" @close="isDetailVisible = false"
+/>
   </div>
 </template>
 

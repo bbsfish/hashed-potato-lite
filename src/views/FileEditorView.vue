@@ -46,8 +46,8 @@
           <thead @dragover.prevent @drop.prevent="onColumnDrop">
             <tr>
               <th class="fixed-col">操作</th>
-              <th 
-                v-for="(key, index) in orderedColumns" 
+              <th
+                v-for="(key, index) in orderedColumns"
                 :key="key"
                 draggable="true"
                 @dragstart="onColumnDragStart(index)"
@@ -76,14 +76,15 @@
        <p v-else class="no-data-message">表示できるデータがありません。「新しいテーブルを作成」ボタンからテーブルを作成してください。</p>
     </div>
 
-    <FileDataEditor
-      v-if="isEditorVisible"
-      :account-data="editingAccount"
-      :email-data="editingEmails"
-      :password-data="editingPasswords"
-      :column-aliases="columnAliases" @close="closeEditor"
-      @save="saveAccountDetails"
-    />
+<FileDataEditor
+  v-if="isEditorVisible"
+  :account-data="editingAccount"
+  :email-data="editingEmails"
+  :password-data="editingPasswords"
+  :column-aliases="columnAliases"
+  :all-table-data="selectedTable"  @close="closeEditor"
+  @save="saveAccountDetails"
+/>
   </div>
 </template>
 
@@ -153,7 +154,7 @@ export default {
     },
     displayedAccounts() {
       if (!this.selectedTable || !this.selectedTable.tbody?.accounts?.account_data) return [];
-      
+
       const accounts = this.selectedTable.tbody.accounts.account_data;
       const emails = this.selectedTable.tbody.emails?.email_data || [];
       const passwords = this.selectedTable.tbody.passwords?.password_data || [];
@@ -163,6 +164,12 @@ export default {
         const password_count = passwords.filter(p => p.serial_number === acc.serial_number).length;
         return { ...acc, email_count, password_count };
       });
+    },
+    tableCategories() {
+      if (!this.selectedTable || !this.selectedTable.tbody?.accounts?.account_data) return [];
+      const categories = this.selectedTable.tbody.accounts.account_data.map(acc => acc.category);
+      // Setを使って重複を除外し、空文字などはフィルタリングする
+      return [...new Set(categories)].filter(Boolean);
     }
   },
   methods: {
@@ -187,7 +194,7 @@ export default {
         const newOrder = [...this.orderedColumns];
         const [draggedItem] = newOrder.splice(this.draggedIndex, 1);
         newOrder.splice(this.dragOverIndex, 0, draggedItem);
-        
+
         this.dataHandler.updateTable(this.selectedTableId, { column_order: newOrder });
         this.isDataChanged = true;
       }
@@ -204,14 +211,14 @@ export default {
     async createFile() {
         const tableName = await this.$dialog.prompt('新しいテーブル名を入力してください', true);
         if (!tableName) return;
-        
+
         const handle = await fs.pickAndSaveFile('', {
              types: [{ description: 'XML Files', accept: { 'application/xml': ['.xml'] } }]
         }, 'untitled.xml');
         if (!handle) return;
-        
+
         this.dataHandler.createNewData();
-        
+
         // デフォルトの列順をDBから読み込む
         const defaultOrder = await db.getState('default_column_order');
         const newTableId = this.dataHandler.createTable(tableName);
@@ -284,7 +291,7 @@ export default {
             this.$dialog.alert('変更点はありません。');
             return;
         }
-        
+
         const fileRecord = await db.getFile(this.fileHandle.name);
         if (!fileRecord || !fileRecord.handle) {
             this.$dialog.alert('ファイルの参照が見つからず、保存できませんでした。');
@@ -325,7 +332,7 @@ export default {
         }
       }
     },
-    
+
     // --- アカウント操作 ---
     addAccount() {
         if (!this.selectedTableId) return;
@@ -503,8 +510,8 @@ export default {
     text-align: left;
     white-space: nowrap;
   }
-  thead th { 
-    background-color: #f2f2f2; 
+  thead th {
+    background-color: #f2f2f2;
     cursor: grab;
     &.drag-over {
       background-color: #cce5ff;
