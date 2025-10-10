@@ -275,7 +275,11 @@ class DataHandle {
 
       const otherEmails = table.tbody.emails.email_data.filter(e => e.serial_number !== serialNumber);
       
-      const updatedEmails = emails.map(e => ({ ...e, serial_number: serialNumber }));
+      const updatedEmails = emails.map(e => {
+          const newEmail = { ...e, serial_number: serialNumber };
+          delete newEmail.user_id;
+          return newEmail;
+      });
 
       table.tbody.emails.email_data = [...otherEmails, ...updatedEmails];
       this._updateTimestamps();
@@ -299,12 +303,16 @@ class DataHandle {
       const otherPasswords = table.tbody.passwords.password_data.filter(p => p.serial_number !== serialNumber);
 
       const now = new Date().toISOString();
-      const updatedPasswords = passwords.map(p => ({
+      const updatedPasswords = passwords.map(p => {
+        const newPassword = {
           ...p,
           serial_number: serialNumber,
           created_at: p.created_at || now,
           updated_at: now,
-      }));
+        };
+        delete newPassword.user_id;
+        return newPassword;
+      });
 
       table.tbody.passwords.password_data = [...otherPasswords, ...updatedPasswords];
       this._updateTimestamps();

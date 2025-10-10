@@ -18,8 +18,8 @@
                     :disabled="isFieldDisabled(key)"
                     type="text"
                     />
-                    <IconClipboard 
-                        v-if="isFieldDisabled(key) && !readonly" 
+                    <IconClipboard
+                        v-if="isFieldDisabled(key) && !readonly"
                         @click="copyToClipboard(localAccountData[key])"
                         class="copy-icon"
                     />
@@ -37,10 +37,6 @@
                 <div class="form-group">
                     <label>メールアドレス</label>
                     <input type="email" v-model="email.mail_address" :disabled="readonly">
-                </div>
-                <div class="form-group">
-                    <label>ユーザーID</label>
-                    <input type="text" v-model="email.user_id" :disabled="readonly">
                 </div>
                 <div class="form-group">
                     <label>概要</label>
@@ -63,10 +59,6 @@
                  <div class="form-group">
                     <label>パスワード</label>
                     <input type="text" v-model="password.password" :disabled="readonly">
-                </div>
-                <div class="form-group">
-                    <label>ユーザーID</label>
-                    <input type="text" v-model="password.user_id" :disabled="readonly">
                 </div>
                 <div class="form-group">
                     <label>概要</label>
@@ -159,7 +151,6 @@ export default {
     addEmail() {
         this.localEmailData.push({
             mail_address: '',
-            user_id: '',
             summary: '',
             note: '',
         });
@@ -170,7 +161,6 @@ export default {
     addPassword() {
         this.localPasswordData.push({
             password: '',
-            user_id: '',
             summary: '',
             note: '',
         });
