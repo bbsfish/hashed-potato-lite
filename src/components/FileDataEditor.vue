@@ -7,76 +7,125 @@
       </div>
       <div class="modal-body">
         <section class="form-section">
-            <h3>基本情報</h3>
-            <form @submit.prevent="save" class="editor-form">
-              <div v-for="(value, key) in localAccountData" :key="key" class="form-group">
-                  <label :for="`account-${key}`">{{ getColumnAlias(key) }}</label>
-                  <div class="input-wrapper">
-                      <input
-                        :id="`account-${key}`"
-                        v-model="localAccountData[key]"
-                        :disabled="isFieldDisabled(key)"
-                        type="text"
-                        :list="datalistId(key)"
-                      />
-                      <datalist v-if="datalistId(key)" :id="datalistId(key)">
-                        <option v-for="option in suggestionOptions[key]" :key="option" :value="option" />
-                      </datalist>
-                      <IconClipboard
-                          v-if="isFieldDisabled(key) && !readonly"
-                          @click="copyToClipboard(localAccountData[key])"
-                          class="copy-icon"
-                      />
-                  </div>
+          <h3>基本情報</h3>
+          <form @submit.prevent="save" class="editor-form">
+            <div
+              v-for="(v, key) in localAccountData"
+              :key="key"
+              class="form-group"
+            >
+              <label :for="`account-${key}`">{{ getColumnAlias(key) }}</label>
+              <div class="input-wrapper">
+                <input
+                  :id="`account-${key}`"
+                  v-model="localAccountData[key]"
+                  :disabled="isFieldDisabled(key)"
+                  type="text"
+                  :list="datalistId(key)"
+                />
+                <datalist v-if="datalistId(key)" :id="datalistId(key)">
+                  <option
+                    v-for="option in suggestionOptions[key]"
+                    :key="option"
+                    :value="option"
+                  />
+                </datalist>
+                <IconClipboard
+                  v-if="isFieldDisabled(key) && !readonly"
+                  @click="copyToClipboard(localAccountData[key])"
+                  class="copy-icon"
+                />
               </div>
-            </form>
+            </div>
+          </form>
         </section>
 
         <section class="form-section">
-            <div class="sub-header">
-                <h3>メールアドレス</h3>
-                <button v-if="!readonly" @click="addEmail" class="btn-add">+</button>
+          <div class="sub-header">
+            <h3>メールアドレス</h3>
+            <button v-if="!readonly" @click="addEmail" class="btn-add">
+              +
+            </button>
+          </div>
+          <div
+            v-for="(email, index) in localEmailData"
+            :key="index"
+            class="sub-form-group"
+          >
+            <div class="form-group">
+              <label>メールアドレス</label>
+              <input
+                type="email"
+                v-model="email.mail_address"
+                :disabled="readonly"
+                list="mail-address-list"
+              />
+              <datalist id="mail-address-list">
+                <option
+                  v-for="addr in suggestionOptions.mail_address"
+                  :key="addr"
+                  :value="addr"
+                />
+              </datalist>
             </div>
-            <div v-for="(email, index) in localEmailData" :key="index" class="sub-form-group">
-                <div class="form-group">
-                    <label>メールアドレス</label>
-                    <input type="email" v-model="email.mail_address" :disabled="readonly" list="mail-address-list">
-                    <datalist id="mail-address-list">
-                        <option v-for="addr in suggestionOptions.mail_address" :key="addr" :value="addr" />
-                    </datalist>
-                </div>
-                <div class="form-group">
-                    <label>概要</label>
-                    <input type="text" v-model="email.summary" :disabled="readonly">
-                </div>
-                <div class="form-group">
-                    <label>ノート</label>
-                    <textarea v-model="email.note" :disabled="readonly"></textarea>
-                </div>
-                <button v-if="!readonly" @click="removeEmail(index)" class="btn-remove">削除</button>
+            <div class="form-group">
+              <label>概要</label>
+              <input type="text" v-model="email.summary" :disabled="readonly" />
             </div>
+            <div class="form-group">
+              <label>ノート</label>
+              <textarea v-model="email.note" :disabled="readonly"></textarea>
+            </div>
+            <button
+              v-if="!readonly"
+              @click="removeEmail(index)"
+              class="btn-remove"
+            >
+              削除
+            </button>
+          </div>
         </section>
 
         <section class="form-section">
-            <div class="sub-header">
-                <h3>パスワード</h3>
-                <button v-if="!readonly" @click="addPassword" class="btn-add">+</button>
+          <div class="sub-header">
+            <h3>パスワード</h3>
+            <button v-if="!readonly" @click="addPassword" class="btn-add">
+              +
+            </button>
+          </div>
+          <div
+            v-for="(password, index) in localPasswordData"
+            :key="index"
+            class="sub-form-group"
+          >
+            <div class="form-group">
+              <label>パスワード</label>
+              <input
+                type="text"
+                v-model="password.password"
+                :disabled="readonly"
+              />
             </div>
-            <div v-for="(password, index) in localPasswordData" :key="index" class="sub-form-group">
-                 <div class="form-group">
-                    <label>パスワード</label>
-                    <input type="text" v-model="password.password" :disabled="readonly">
-                </div>
-                <div class="form-group">
-                    <label>概要</label>
-                    <input type="text" v-model="password.summary" :disabled="readonly">
-                </div>
-                <div class="form-group">
-                    <label>ノート</label>
-                    <textarea v-model="password.note" :disabled="readonly"></textarea>
-                </div>
-                <button v-if="!readonly" @click="removePassword(index)" class="btn-remove">削除</button>
+            <div class="form-group">
+              <label>概要</label>
+              <input
+                type="text"
+                v-model="password.summary"
+                :disabled="readonly"
+              />
             </div>
+            <div class="form-group">
+              <label>ノート</label>
+              <textarea v-model="password.note" :disabled="readonly"></textarea>
+            </div>
+            <button
+              v-if="!readonly"
+              @click="removePassword(index)"
+              class="btn-remove"
+            >
+              削除
+            </button>
+          </div>
         </section>
       </div>
       <div class="modal-footer">
@@ -98,7 +147,7 @@ export default {
   props: {
     title: {
       type: String,
-      default: 'アカウント情報の編集'
+      default: 'アカウント情報の編集',
     },
     readonly: {
       type: Boolean,
@@ -109,12 +158,12 @@ export default {
       required: true,
     },
     emailData: {
-        type: Array,
-        default: () => [],
+      type: Array,
+      default: () => [],
     },
     passwordData: {
-        type: Array,
-        default: () => [],
+      type: Array,
+      default: () => [],
     },
     columnAliases: {
       type: Object,
@@ -133,7 +182,12 @@ export default {
       localEmailData: JSON.parse(JSON.stringify(this.emailData)),
       localPasswordData: JSON.parse(JSON.stringify(this.passwordData)),
       // サジェスト機能を持たせるフィールドのリスト
-      suggestibleFields: ['category', 'status', 'user_id', 'service_name_initial'],
+      suggestibleFields: [
+        'category',
+        'status',
+        'user_id',
+        'service_name_initial',
+      ],
     };
   },
   computed: {
@@ -150,26 +204,31 @@ export default {
 
       // 指定されたキーのユニークな値の配列を返すヘルパー関数
       const getUniqueValues = (key, data) => {
-        return [...new Set(data.map(item => item[key]).filter(Boolean))];
+        return [...new Set(data.map((item) => item[key]).filter(Boolean))];
       };
-      
+
       const options = {
         mail_address: getUniqueValues('mail_address', emails),
       };
 
-      this.suggestibleFields.forEach(field => {
+      this.suggestibleFields.forEach((field) => {
         options[field] = getUniqueValues(field, accounts);
       });
 
       return options;
-    }
+    },
   },
   methods: {
     getColumnAlias(key) {
-        return this.columnAliases[key] || key;
+      return this.columnAliases[key] || key;
     },
     isFieldDisabled(key) {
-        return this.readonly || key === 'serial_number' || key === 'created_at' || key === 'updated_at';
+      return (
+        this.readonly ||
+        key === 'serial_number' ||
+        key === 'created_at' ||
+        key === 'updated_at'
+      );
     },
     /**
      * サジェスト機能を持つフィールドに対応するdatalistのIDを返す
@@ -194,31 +253,31 @@ export default {
     },
     save() {
       this.$emit('save', {
-          account: this.localAccountData,
-          emails: this.localEmailData,
-          passwords: this.localPasswordData,
+        account: this.localAccountData,
+        emails: this.localEmailData,
+        passwords: this.localPasswordData,
       });
     },
     addEmail() {
-        this.localEmailData.push({
-            mail_address: '',
-            summary: '',
-            note: '',
-        });
+      this.localEmailData.push({
+        mail_address: '',
+        summary: '',
+        note: '',
+      });
     },
     removeEmail(index) {
-        this.localEmailData.splice(index, 1);
+      this.localEmailData.splice(index, 1);
     },
     addPassword() {
-        this.localPasswordData.push({
-            password: '',
-            summary: '',
-            note: '',
-        });
+      this.localPasswordData.push({
+        password: '',
+        summary: '',
+        note: '',
+      });
     },
     removePassword(index) {
-        this.localPasswordData.splice(index, 1);
-    }
+      this.localPasswordData.splice(index, 1);
+    },
   },
   watch: {
     accountData(newData) {
@@ -229,8 +288,8 @@ export default {
     },
     passwordData(newData) {
       this.localPasswordData = JSON.parse(JSON.stringify(newData));
-    }
-  }
+    },
+  },
 };
 </script>
 
@@ -251,7 +310,7 @@ export default {
 .editor-modal {
   background: white;
   border-radius: 8px;
-  box-shadow: 0 5px 15px rgba(0,0,0,0.3);
+  box-shadow: 0 5px 15px rgba(0, 0, 0, 0.3);
   width: 90%;
   max-width: 700px;
   display: flex;
@@ -286,13 +345,13 @@ export default {
 }
 
 .form-section {
-    margin: 1.5rem 0;
-    h3 {
-        margin-top: 0;
-        margin-bottom: 1rem;
-        border-bottom: 1px solid #eee;
-        padding-bottom: 0.5rem;
-    }
+  margin: 1.5rem 0;
+  h3 {
+    margin-top: 0;
+    margin-bottom: 1rem;
+    border-bottom: 1px solid #eee;
+    padding-bottom: 0.5rem;
+  }
 }
 
 .editor-form {
@@ -313,18 +372,19 @@ export default {
   }
 
   .input-wrapper {
-      position: relative;
-      display: flex;
-      align-items: center;
-      .copy-icon {
-          position: absolute;
-          right: 10px;
-          cursor: pointer;
-          color: #888;
-      }
+    position: relative;
+    display: flex;
+    align-items: center;
+    .copy-icon {
+      position: absolute;
+      right: 10px;
+      cursor: pointer;
+      color: #888;
+    }
   }
 
-  input, textarea {
+  input,
+  textarea {
     padding: 0.75rem;
     border: 1px solid #ccc;
     border-radius: 4px;
@@ -333,50 +393,49 @@ export default {
     box-sizing: border-box;
 
     &:disabled {
-        background-color: #f0f0f0;
-        cursor: not-allowed;
+      background-color: #f0f0f0;
+      cursor: not-allowed;
     }
   }
   textarea {
-      min-height: 80px;
-      resize: vertical;
+    min-height: 80px;
+    resize: vertical;
   }
 }
 
 .sub-header {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    .btn-add {
-        border-radius: 50%;
-        width: 28px;
-        height: 28px;
-        border: 1px solid #28a745;
-        background-color: #28a745;
-        color: white;
-        font-size: 1.2rem;
-        cursor: pointer;
-    }
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  .btn-add {
+    border-radius: 50%;
+    width: 28px;
+    height: 28px;
+    border: 1px solid #28a745;
+    background-color: #28a745;
+    color: white;
+    font-size: 1.2rem;
+    cursor: pointer;
+  }
 }
 .sub-form-group {
-    border: 1px solid #e0e0e0;
+  border: 1px solid #e0e0e0;
+  border-radius: 4px;
+  padding: 1rem;
+  margin-bottom: 1rem;
+  position: relative;
+  .btn-remove {
+    position: absolute;
+    top: 0.5rem;
+    right: 0.5rem;
+    background: #d9534f;
+    color: white;
+    border: none;
+    padding: 0.25rem 0.75rem;
     border-radius: 4px;
-    padding: 1rem;
-    margin-bottom: 1rem;
-    position: relative;
-    .btn-remove {
-        position: absolute;
-        top: 0.5rem;
-        right: 0.5rem;
-        background: #d9534f;
-        color: white;
-        border: none;
-        padding: 0.25rem 0.75rem;
-        border-radius: 4px;
-        cursor: pointer;
-    }
+    cursor: pointer;
+  }
 }
-
 
 .modal-footer {
   padding: 1rem 1.5rem;
@@ -385,19 +444,20 @@ export default {
   justify-content: flex-end;
   gap: 1rem;
 
-  .btn-cancel, .btn-save {
-      padding: 0.75rem 1.5rem;
-      border: none;
-      border-radius: 4px;
-      font-size: 1rem;
-      cursor: pointer;
+  .btn-cancel,
+  .btn-save {
+    padding: 0.75rem 1.5rem;
+    border: none;
+    border-radius: 4px;
+    font-size: 1rem;
+    cursor: pointer;
   }
   .btn-cancel {
-      background-color: #f0f0f0;
+    background-color: #f0f0f0;
   }
   .btn-save {
-      background-color: #007bff;
-      color: white;
+    background-color: #007bff;
+    color: white;
   }
 }
 </style>

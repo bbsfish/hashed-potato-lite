@@ -9,7 +9,7 @@
 </template>
 
 <script>
-import IconClipboard from './icons/IconClipboard.vue';
+import IconClipboard from '@/components/icons/IconClipboard.vue';
 
 export default {
   name: 'ActionBox',

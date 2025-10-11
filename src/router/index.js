@@ -1,9 +1,9 @@
 import { createRouter, createWebHistory } from 'vue-router';
-import HomeView from '@/views/HomeView.vue';
 import PasswordGeneratorView from '@/views/PasswordGeneratorView.vue';
 import FileEditorView from '@/views/FileEditorView.vue';
+import FileViewerView from '@/views/FileViewerView.vue';
 import BrowserSettingView from '@/views/BrowserSettingView.vue';
-import FileViewerView from '@/views/FileViewerView.vue'; 
+import HomeView from '@/views/HomeView.vue';
 
 const routes = [
   {
@@ -17,19 +17,19 @@ const routes = [
     component: PasswordGeneratorView,
   },
   {
+    path: '/settings',
+    name: 'BrowserSetting',
+    component: BrowserSettingView,
+  },
+  {
     path: '/file-editor',
-    name: 'FileEditor',
+    name: 'LocalFileEditor',
     component: FileEditorView,
   },
   {
     path: '/file-viewer',
-    name: 'FileViewer',
+    name: 'LocalFileViewer',
     component: FileViewerView,
-  },
-  {
-    path: '/settings',
-    name: 'Settings',
-    component: BrowserSettingView,
   },
 ];
 

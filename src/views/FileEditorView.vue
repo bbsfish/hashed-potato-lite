@@ -3,15 +3,25 @@
     <div v-if="!fileHandle" class="file-selection-container">
       <h1>ファイルエディタ</h1>
       <div class="button-group">
-        <button @click="selectFile" class="action-button">ファイルを開く</button>
-        <button @click="createFile" class="action-button">新規ファイル作成</button>
+        <button @click="selectFile" class="action-button">
+          ファイルを開く
+        </button>
+        <button @click="createFile" class="action-button">
+          新規ファイル作成
+        </button>
       </div>
       <div class="recent-files">
         <h2>最近使ったファイル</h2>
         <ul v-if="recentFiles.length > 0">
-          <li v-for="file in recentFiles" :key="file.id" @click="openRecentFile(file.handle)">
+          <li
+            v-for="file in recentFiles"
+            :key="file.id"
+            @click="openRecentFile(file.handle)"
+          >
             <span class="file-name">{{ file.name }}</span>
-            <span class="file-date">最終更新: {{ new Date(file.updatedAt).toLocaleString() }}</span>
+            <span class="file-date"
+              >最終更新: {{ new Date(file.updated_at).toLocaleString() }}</span
+            >
           </li>
         </ul>
         <p v-else>最近使ったファイルはありません。</p>
@@ -22,25 +32,51 @@
       <div class="header">
         <h1>{{ fileName }}</h1>
         <div class="actions">
-          <button @click="saveFile()" class="save-button">保存</button>
-          <button @click="closeFile" class="close-button">保存せずに終了</button>
+          <button @click="saveFile()" class="action-button">保存</button>
+          <button @click="saveAndClose" class="action-button">
+            保存して終了
+          </button>
+          <button @click="closeFile" class="close-button">
+            保存せずに終了
+          </button>
         </div>
       </div>
 
       <div class="table-controls">
-        <select v-if="tables.length > 0" v-model="selectedTableId" class="table-selection">
-            <option disabled value="">テーブルを選択してください</option>
-            <option v-for="table in tables" :key="table.thead.table_id" :value="table.thead.table_id">
+        <select
+          v-if="tables.length > 0"
+          v-model="selectedTableId"
+          class="table-selection"
+        >
+          <option disabled value="">テーブルを選択してください</option>
+          <option
+            v-for="table in tables"
+            :key="table.thead.table_id"
+            :value="table.thead.table_id"
+          >
             {{ table.thead.table_name }}
-            </option>
+          </option>
         </select>
-        <button @click="showCreateTablePrompt" class="add-table-button">新しいテーブルを作成</button>
-       </div>
-
+        <button @click="showCreateTablePrompt" class="add-table-button">
+          新しいテーブルを作成
+        </button>
+        <button @click="renameTable" :disabled="!selectedTableId">
+          テーブル名を変更
+        </button>
+        <button
+          @click="deleteSelectedTable"
+          :disabled="!selectedTableId"
+          class="danger-button"
+        >
+          テーブルを削除
+        </button>
+      </div>
 
       <div v-if="selectedTable" class="data-grid-container">
         <div class="table-actions">
-            <button @click="addAccount" class="add-account-button">アカウントを追加</button>
+          <button @click="addAccount" class="add-account-button">
+            アカウントを追加
+          </button>
         </div>
         <table class="data-grid">
           <thead @dragover.prevent @drop.prevent="onColumnDrop">
@@ -60,31 +96,53 @@
             </tr>
           </thead>
           <tbody>
-            <tr v-for="account in displayedAccounts" :key="account.serial_number" @click="selectAccount(account)">
+            <tr
+              v-for="account in displayedAccounts"
+              :key="account.serial_number"
+              @click="selectAccount(account)"
+            >
               <td class="fixed-col">
-                <button @click.stop="deleteAccount(account.serial_number)" class="delete-button">削除</button>
+                <button
+                  @click.stop="deleteAccount(account.serial_number)"
+                  class="delete-button"
+                >
+                  削除
+                </button>
               </td>
-              <td v-for="key in orderedColumns" :key="key">{{ account[key] }}</td>
+              <td v-for="key in orderedColumns" :key="key">
+                {{ account[key] }}
+              </td>
             </tr>
           </tbody>
         </table>
-         <p v-if="!displayedAccounts || displayedAccounts.length === 0" class="no-data-message">
-            データがありません。「アカウントを追加」ボタンから新しいデータを追加してください。
+        <p
+          v-if="!displayedAccounts || displayedAccounts.length === 0"
+          class="no-data-message"
+        >
+          データがありません。「アカウントを追加」ボタンから新しいデータを追加してください。
         </p>
       </div>
-       <p v-else-if="tables.length > 0 && !selectedTable" class="no-data-message">テーブルを選択してください。</p>
-       <p v-else class="no-data-message">表示できるデータがありません。「新しいテーブルを作成」ボタンからテーブルを作成してください。</p>
+      <p
+        v-else-if="tables.length > 0 && !selectedTable"
+        class="no-data-message"
+      >
+        テーブルを選択してください。
+      </p>
+      <p v-else class="no-data-message">
+        表示できるデータがありません。「新しいテーブルを作成」ボタンからテーブルを作成してください。
+      </p>
     </div>
 
-<FileDataEditor
-  v-if="isEditorVisible"
-  :account-data="editingAccount"
-  :email-data="editingEmails"
-  :password-data="editingPasswords"
-  :column-aliases="columnAliases"
-  :all-table-data="selectedTable"  @close="closeEditor"
-  @save="saveAccountDetails"
-/>
+    <FileDataEditor
+      v-if="isEditorVisible"
+      :account-data="editingAccount"
+      :email-data="editingEmails"
+      :password-data="editingPasswords"
+      :column-aliases="columnAliases"
+      :all-table-data="selectedTable"
+      @close="closeEditor"
+      @save="saveAccountDetails"
+    />
   </div>
 </template>
 
@@ -120,8 +178,12 @@ export default {
   },
   computed: {
     fileHandle: {
-      get() { return this.$store.state.fileHandle; },
-      set(handle) { this.$store.commit('setFileHandle', handle); },
+      get() {
+        return this.$store.state.fileHandle;
+      },
+      set(handle) {
+        this.$store.commit('setFileHandle', handle);
+      },
     },
     fileName() {
       return this.fileHandle ? this.fileHandle.name : '';
@@ -131,46 +193,56 @@ export default {
     },
     selectedTable() {
       if (!this.selectedTableId || this.tables.length === 0) return null;
-      return this.tables.find(t => t.thead.table_id === this.selectedTableId);
+      return this.tables.find((t) => t.thead.table_id === this.selectedTableId);
     },
     orderedColumns() {
       if (!this.selectedTable?.thead) return [];
       const order = this.selectedTable.thead.column_order?.col;
       if (order && Array.isArray(order)) {
         const currentKeys = this.allAccountKeys;
-        const ordered = order.filter(key => currentKeys.includes(key));
-        const newKeys = currentKeys.filter(key => !order.includes(key));
+        const ordered = order.filter((key) => currentKeys.includes(key));
+        const newKeys = currentKeys.filter((key) => !order.includes(key));
         return [...ordered, ...newKeys];
       }
       return this.allAccountKeys;
     },
     allAccountKeys() {
-        const defaultKeys = [
-            'serial_number', 'service_name', 'user_id', 'website_url', 'note',
-            'status', 'category', 'service_name_initial', 'service_description',
-            'created_at', 'updated_at'
-        ];
-        return ['email_count', 'password_count', ...defaultKeys];
+      const defaultKeys = [
+        'serial_number',
+        'service_name',
+        'user_id',
+        'website_url',
+        'note',
+        'status',
+        'category',
+        'service_name_initial',
+        'service_description',
+        'created_at',
+        'updated_at',
+      ];
+      return ['email_count', 'password_count', ...defaultKeys];
     },
     displayedAccounts() {
-      if (!this.selectedTable || !this.selectedTable.tbody?.accounts?.account_data) return [];
+      if (
+        !this.selectedTable ||
+        !this.selectedTable.tbody?.accounts?.account_data
+      )
+        return [];
 
       const accounts = this.selectedTable.tbody.accounts.account_data;
       const emails = this.selectedTable.tbody.emails?.email_data || [];
       const passwords = this.selectedTable.tbody.passwords?.password_data || [];
 
-      return accounts.map(acc => {
-        const email_count = emails.filter(e => e.serial_number === acc.serial_number).length;
-        const password_count = passwords.filter(p => p.serial_number === acc.serial_number).length;
+      return accounts.map((acc) => {
+        const email_count = emails.filter(
+          (e) => e.serial_number === acc.serial_number
+        ).length;
+        const password_count = passwords.filter(
+          (p) => p.serial_number === acc.serial_number
+        ).length;
         return { ...acc, email_count, password_count };
       });
     },
-    tableCategories() {
-      if (!this.selectedTable || !this.selectedTable.tbody?.accounts?.account_data) return [];
-      const categories = this.selectedTable.tbody.accounts.account_data.map(acc => acc.category);
-      // Setを使って重複を除外し、空文字などはフィルタリングする
-      return [...new Set(categories)].filter(Boolean);
-    }
   },
   methods: {
     // 列のエイリアスを取得
@@ -190,12 +262,18 @@ export default {
       this.dragOverIndex = null;
     },
     onColumnDrop() {
-      if (this.draggedIndex !== null && this.dragOverIndex !== null && this.draggedIndex !== this.dragOverIndex) {
+      if (
+        this.draggedIndex !== null &&
+        this.dragOverIndex !== null &&
+        this.draggedIndex !== this.dragOverIndex
+      ) {
         const newOrder = [...this.orderedColumns];
         const [draggedItem] = newOrder.splice(this.draggedIndex, 1);
         newOrder.splice(this.dragOverIndex, 0, draggedItem);
 
-        this.dataHandler.updateTable(this.selectedTableId, { column_order: newOrder });
+        this.dataHandler.updateTable(this.selectedTableId, {
+          column_order: newOrder,
+        });
         this.isDataChanged = true;
       }
       this.onColumnDragEnd();
@@ -204,53 +282,73 @@ export default {
     // --- ファイル操作 ---
     async selectFile() {
       const handles = await fs.pickFile({
-        types: [{ description: 'XML Files', accept: { 'application/xml': ['.xml'] } }]
+        types: [
+          { description: 'XML Files', accept: { 'application/xml': ['.xml'] } },
+        ],
       });
       if (handles && handles.length > 0) this.openFile(handles[0]);
     },
     async createFile() {
-        const tableName = await this.$dialog.prompt('新しいテーブル名を入力してください', true);
-        if (!tableName) return;
+      const tableName = await this.$dialog.prompt(
+        '新しいテーブル名を入力してください',
+        true
+      );
+      if (!tableName) return;
 
-        const handle = await fs.pickAndSaveFile('', {
-             types: [{ description: 'XML Files', accept: { 'application/xml': ['.xml'] } }]
-        }, 'untitled.xml');
-        if (!handle) return;
+      const handle = await fs.pickAndSaveFile(
+        '',
+        {
+          types: [
+            {
+              description: 'XML Files',
+              accept: { 'application/xml': ['.xml'] },
+            },
+          ],
+        },
+        'untitled.xml'
+      );
+      if (!handle) return;
 
-        this.dataHandler.createNewData();
+      this.dataHandler.createNewData();
 
-        // デフォルトの列順をDBから読み込む
-        const defaultOrder = await db.getState('default_column_order');
-        const newTableId = this.dataHandler.createTable(tableName);
-        if (newTableId && defaultOrder) {
-            this.dataHandler.updateTable(newTableId, { column_order: defaultOrder });
+      // デフォルトの列順をDBから読み込む
+      const defaultOrder = await db.getState('default_column_order');
+      const newTableId = this.dataHandler.createTable(tableName);
+      if (newTableId && defaultOrder) {
+        this.dataHandler.updateTable(newTableId, {
+          column_order: defaultOrder,
+        });
+      }
+
+      const xmlString = this.dataHandler.exportXml();
+      if (xmlString) {
+        const success = await fs.saveFile(handle, xmlString);
+        if (!success) {
+          this.$dialog.alert('ファイルの初期化に失敗しました。');
+          return;
         }
-
-        const xmlString = this.dataHandler.exportXml();
-        if (xmlString) {
-            const success = await fs.saveFile(handle, xmlString);
-            if (!success) {
-                this.$dialog.alert('ファイルの初期化に失敗しました。');
-                return;
-            }
-        }
-        this.openFile(handle);
+      }
+      this.openFile(handle);
     },
     async loadRecentFiles() {
-      this.recentFiles = (await db.getAllFiles()).sort((a, b) => new Date(b.updatedAt) - new Date(a.updatedAt));
+      this.recentFiles = (await db.getAllFiles()).sort(
+        (a, b) => new Date(b.updated_at) - new Date(a.updated_at)
+      );
     },
     async openRecentFile(handle) {
-        if (await handle.queryPermission({ mode: 'readwrite' }) !== 'granted') {
-            if (await handle.requestPermission({ mode: 'readwrite' }) !== 'granted') {
-                this.$dialog.alert('ファイルへのアクセスが許可されませんでした。');
-                return;
-            }
+      if ((await handle.queryPermission({ mode: 'readwrite' })) !== 'granted') {
+        if (
+          (await handle.requestPermission({ mode: 'readwrite' })) !== 'granted'
+        ) {
+          this.$dialog.alert('ファイルへのアクセスが許可されませんでした。');
+          return;
         }
-        this.openFile(handle);
+      }
+      this.openFile(handle);
     },
     async openFile(handle) {
       this.fileHandle = handle;
-      this.columnAliases = await db.getState('column_aliases') || {};
+      this.columnAliases = (await db.getState('column_aliases')) || {};
       const content = await fs.readFile(handle);
       if (content) {
         this.dataHandler.importXml(content);
@@ -258,9 +356,9 @@ export default {
         this.dataHandler.updateLastAccessed();
 
         try {
-            await db.addFile(handle.name, handle, handle.name);
+          await db.addFile(handle.name, handle, handle.name);
         } catch (e) {
-            await db.updateFile(handle.name, { handle, name: handle.name });
+          await db.updateFile(handle.name, { handle, name: handle.name });
         }
         this.isDataChanged = false;
 
@@ -276,53 +374,67 @@ export default {
       this.loadRecentFiles();
     },
     async closeFile() {
-        if (this.isDataChanged) {
-            if (!await this.$dialog.confirm('変更が保存されていません。本当にファイルを閉じますか？')) return;
-        }
-        this.fileHandle = null;
-        this.tableData = null;
-        this.selectedTableId = null;
-        this.isDataChanged = false;
-        this.closeEditor();
+      if (this.isDataChanged) {
+        if (
+          !(await this.$dialog.confirm(
+            '変更が保存されていません。本当にファイルを閉じますか？'
+          ))
+        )
+          return;
+      }
+      this.fileHandle = null;
+      this.tableData = null;
+      this.selectedTableId = null;
+      this.isDataChanged = false;
+      this.closeEditor();
     },
     async saveFile(forceSave = false) {
-        if (!this.fileHandle) return;
-        if (!this.isDataChanged && !forceSave) {
-            this.$dialog.alert('変更点はありません。');
-            return;
-        }
+      if (!this.fileHandle) return false;
+      if (!this.isDataChanged && !forceSave) {
+        this.$dialog.alert('変更点はありません。');
+        return true;
+      }
 
-        const fileRecord = await db.getFile(this.fileHandle.name);
-        if (!fileRecord || !fileRecord.handle) {
-            this.$dialog.alert('ファイルの参照が見つからず、保存できませんでした。');
-            return;
+      const xmlString = this.dataHandler.exportXml();
+      if (xmlString) {
+        const success = await fs.saveFile(this.fileHandle, xmlString);
+        if (success) {
+          this.$floatingmessage.message('ファイルを保存しました。');
+          this.isDataChanged = false;
+          await db.updateFile(this.fileHandle.name, {
+            handle: this.fileHandle,
+            name: this.fileHandle.name,
+          });
+          this.loadRecentFiles();
+          return true;
+        } else {
+          this.$dialog.alert('ファイルの保存に失敗しました。');
+          return false;
         }
-        const currentHandle = fileRecord.handle;
-
-        const xmlString = this.dataHandler.exportXml();
-        if (xmlString) {
-            const success = await fs.saveFile(currentHandle, xmlString);
-            if (success) {
-                this.$dialog.alert('ファイルを保存しました。');
-                this.isDataChanged = false;
-                this.fileHandle = currentHandle;
-                await db.updateFile(currentHandle.name, { handle: currentHandle, name: currentHandle.name });
-                this.loadRecentFiles();
-            } else {
-                this.$dialog.alert('ファイルの保存に失敗しました。');
-            }
-        }
+      }
+      return false;
+    },
+    async saveAndClose() {
+      const success = await this.saveFile();
+      if (success) {
+        this.closeFile();
+      }
     },
 
     // --- テーブル操作 ---
     async showCreateTablePrompt() {
-      const tableName = await this.$dialog.prompt('新しいテーブル名を入力してください', true);
+      const tableName = await this.$dialog.prompt(
+        '新しいテーブル名を入力してください',
+        true
+      );
       if (tableName) {
         const newTableId = this.dataHandler.createTable(tableName);
-         // デフォルトの列順をDBから読み込んで設定
+        // デフォルトの列順をDBから読み込んで設定
         const defaultOrder = await db.getState('default_column_order');
         if (newTableId && defaultOrder) {
-            this.dataHandler.updateTable(newTableId, { column_order: defaultOrder });
+          this.dataHandler.updateTable(newTableId, {
+            column_order: defaultOrder,
+          });
         }
 
         if (newTableId) {
@@ -332,65 +444,131 @@ export default {
         }
       }
     },
+    async renameTable() {
+      if (!this.selectedTable) return;
+      const newName = await this.$dialog.prompt(
+        '新しいテーブル名を入力してください',
+        this.selectedTable.thead.table_name
+      );
+      if (newName && newName !== this.selectedTable.thead.table_name) {
+        this.dataHandler.updateTable(this.selectedTableId, {
+          table_name: newName,
+        });
+        this.isDataChanged = true;
+        this.$dialog.alert('テーブル名を変更しました。');
+      }
+    },
+    async deleteSelectedTable() {
+      if (!this.selectedTable) return;
+      if (
+        await this.$dialog.confirm(
+          `テーブル「${this.selectedTable.thead.table_name}」を本当に削除しますか？この操作は元に戻せません。`
+        )
+      ) {
+        this.dataHandler.deleteTable(this.selectedTableId);
+        this.isDataChanged = true;
+        this.selectedTableId = null;
+        this.$dialog.alert('テーブルを削除しました。');
+      }
+    },
 
     // --- アカウント操作 ---
     addAccount() {
-        if (!this.selectedTableId) return;
-        const newAccountTemplate = {
-            service_name: '新しいサービス', service_name_initial: '', service_description: '',
-            category: '', user_id: '', website_url: '', status: 'active', note: '',
-        };
-        const newSerialNumber = this.dataHandler.createAccount(this.selectedTableId, newAccountTemplate);
-        if (newSerialNumber) {
-            const newAccount = this.dataHandler._findAccount(this.selectedTableId, newSerialNumber);
-            this.selectAccount(newAccount);
-            this.isDataChanged = true;
-        }
+      if (!this.selectedTableId) return;
+      const newAccountTemplate = {
+        service_name: '新しいサービス',
+        service_name_initial: '',
+        service_description: '',
+        category: '',
+        user_id: '',
+        website_url: '',
+        status: 'active',
+        note: '',
+      };
+      const newSerialNumber = this.dataHandler.createAccount(
+        this.selectedTableId,
+        newAccountTemplate
+      );
+      if (newSerialNumber) {
+        const newAccount = this.dataHandler._findAccount(
+          this.selectedTableId,
+          newSerialNumber
+        );
+        this.selectAccount(newAccount);
+        this.isDataChanged = true;
+      }
     },
     async deleteAccount(serialNumber) {
-        if (await this.$dialog.confirm('このアカウントを本当に削除しますか？関連するメールとパスワードも削除されます。')) {
-            if (this.dataHandler.deleteAccount(this.selectedTableId, serialNumber)) {
-                this.isDataChanged = true;
-                this.$dialog.alert('アカウントを削除しました。');
-            }
+      if (
+        await this.$dialog.confirm(
+          'このアカウントを本当に削除しますか？関連するメールとパスワードも削除されます。'
+        )
+      ) {
+        if (
+          this.dataHandler.deleteAccount(this.selectedTableId, serialNumber)
+        ) {
+          this.isDataChanged = true;
+          this.$dialog.alert('アカウントを削除しました。');
         }
+      }
     },
 
     // --- 編集フォーム ---
     selectAccount(account) {
-        this.editingAccount = JSON.parse(JSON.stringify(account));
-        const table = this.selectedTable;
-        if (table && table.tbody) {
-            this.editingEmails = JSON.parse(JSON.stringify(
-                table.tbody.emails?.email_data?.filter(e => e.serial_number === account.serial_number) || []
-            ));
-            this.editingPasswords = JSON.parse(JSON.stringify(
-                table.tbody.passwords?.password_data?.filter(p => p.serial_number === account.serial_number) || []
-            ));
-        }
-        this.isEditorVisible = true;
+      this.editingAccount = JSON.parse(JSON.stringify(account));
+      const table = this.selectedTable;
+      if (table && table.tbody) {
+        this.editingEmails = JSON.parse(
+          JSON.stringify(
+            table.tbody.emails?.email_data?.filter(
+              (e) => e.serial_number === account.serial_number
+            ) || []
+          )
+        );
+        this.editingPasswords = JSON.parse(
+          JSON.stringify(
+            table.tbody.passwords?.password_data?.filter(
+              (p) => p.serial_number === account.serial_number
+            ) || []
+          )
+        );
+      }
+      this.isEditorVisible = true;
     },
     closeEditor() {
-        this.isEditorVisible = false;
-        this.editingAccount = null;
-        this.editingEmails = [];
-        this.editingPasswords = [];
+      this.isEditorVisible = false;
+      this.editingAccount = null;
+      this.editingEmails = [];
+      this.editingPasswords = [];
     },
     saveAccountDetails({ account, emails, passwords }) {
-        const sn = account.serial_number;
-        const accountSuccess = this.dataHandler.updateAccount(this.selectedTableId, sn, account);
-        const emailsSuccess = this.dataHandler.updateEmailsForAccount(this.selectedTableId, sn, emails);
-        const passwordsSuccess = this.dataHandler.updatePasswordsForAccount(this.selectedTableId, sn, passwords);
+      const sn = account.serial_number;
+      const accountSuccess = this.dataHandler.updateAccount(
+        this.selectedTableId,
+        sn,
+        account
+      );
+      const emailsSuccess = this.dataHandler.updateEmailsForAccount(
+        this.selectedTableId,
+        sn,
+        emails
+      );
+      const passwordsSuccess = this.dataHandler.updatePasswordsForAccount(
+        this.selectedTableId,
+        sn,
+        passwords
+      );
 
-        if (accountSuccess && emailsSuccess && passwordsSuccess) this.isDataChanged = true;
-        this.closeEditor();
+      if (accountSuccess && emailsSuccess && passwordsSuccess)
+        this.isDataChanged = true;
+      this.closeEditor();
     },
   },
   async mounted() {
-    this.columnAliases = await db.getState('column_aliases') || {};
     await this.loadRecentFiles();
+    this.columnAliases = (await db.getState('column_aliases')) || {};
     if (this.fileHandle) this.openFile(this.fileHandle);
-  }
+  },
 };
 </script>
 
@@ -405,22 +583,37 @@ export default {
 
 .file-selection-container {
   text-align: center;
-  h1 { margin-bottom: 2rem; }
-  .button-group {
-      display: flex;
-      justify-content: center;
-      gap: 1rem;
-      margin-bottom: 3rem;
+  h1 {
+    margin-bottom: 2rem;
   }
-  .action-button {
-      padding: 1rem 2rem;
-      font-size: 1.2rem;
-      color: white;
-      border: none;
-      border-radius: 8px;
-      cursor: pointer;
-      background-color: var.$button-color;
-      &:hover { background-color: var.$button-hovered-color; }
+  .button-group {
+    display: flex;
+    justify-content: center;
+    gap: 1rem;
+    margin-bottom: 3rem;
+  }
+}
+
+.action-button,
+.add-table-button,
+.add-account-button,
+button {
+  padding: 0.5rem 1rem;
+  border-radius: 4px;
+  border: 1px solid;
+  cursor: pointer;
+  font-size: 0.9rem;
+  transition: background-color 0.2s ease, border-color 0.2s ease;
+}
+
+.action-button {
+  padding: 1rem 2rem;
+  font-size: 1.2rem;
+  color: white;
+  border: none;
+  background-color: var.$button-color;
+  &:hover {
+    background-color: var.$button-hovered-color;
   }
 }
 
@@ -442,9 +635,15 @@ export default {
       padding: 1rem;
       cursor: pointer;
       border-radius: 4px;
-      &:hover { background-color: #f0f0f0; }
-      .file-name { font-weight: bold; }
-      .file-date { color: #888; }
+      &:hover {
+        background-color: #f0f0f0;
+      }
+      .file-name {
+        font-weight: bold;
+      }
+      .file-date {
+        color: #888;
+      }
     }
   }
 }
@@ -455,56 +654,71 @@ export default {
     justify-content: space-between;
     align-items: center;
     margin-bottom: 1.5rem;
-    .actions { display: flex; gap: 1rem; }
-    .save-button, .close-button {
-        padding: 0.5rem 1rem;
-        border-radius: 4px;
-        border: 1px solid;
-        cursor: pointer;
-    }
-    .save-button {
+    .actions {
+      display: flex;
+      gap: 1rem;
+      .action-button {
         background-color: var.$button-color;
         color: white;
         border-color: var.$button-color;
-    }
-    .close-button {
+      }
+      .close-button {
         background-color: #f0f0f0;
         color: #333;
         border-color: #ccc;
+      }
     }
   }
   .table-controls {
-      display: flex;
-      gap: 1rem;
-      margin-bottom: 1.5rem;
-      align-items: center;
-      .table-selection {
-          padding: 0.5rem;
-          border-radius: 4px;
-      }
+    display: flex;
+    gap: 1rem;
+    margin-bottom: 1.5rem;
+    align-items: center;
+    .table-selection {
+      padding: 0.5rem;
+      border-radius: 4px;
+    }
   }
 }
 
 .data-grid-container {
   overflow-x: auto;
   .table-actions {
-      margin-bottom: 1rem;
+    margin-bottom: 1rem;
   }
 }
-.add-table-button, .add-account-button {
-    padding: 0.5rem 1rem;
-    background-color: #28a745;
-    color: white;
-    border: none;
-    border-radius: 4px;
-    cursor: pointer;
-    &:hover { background-color: #218838; }
+
+.add-table-button,
+.add-account-button {
+  background-color: #28a745;
+  color: white;
+  border: none;
+  &:hover {
+    background-color: #218838;
+  }
+}
+
+.danger-button {
+  background-color: var.$danger-color;
+  color: white;
+  border: none;
+  &:hover:not(:disabled) {
+    opacity: 0.85;
+  }
+}
+
+button:disabled {
+  background-color: #ccc;
+  border-color: #ccc;
+  cursor: not-allowed;
+  opacity: 0.7;
 }
 
 .data-grid {
   width: 100%;
   border-collapse: collapse;
-  th, td {
+  th,
+  td {
     border: 1px solid #ddd;
     padding: 8px;
     text-align: left;
@@ -525,22 +739,24 @@ export default {
     z-index: 1;
   }
   tbody tr {
-      cursor: pointer;
-      &:hover { background-color: #f5f5f5; }
+    cursor: pointer;
+    &:hover {
+      background-color: #f5f5f5;
+    }
   }
   .delete-button {
-      background: none;
-      border: none;
-      color: var.$danger-color;
-      cursor: pointer;
+    background: none;
+    border: none;
+    color: var.$danger-color;
+    cursor: pointer;
   }
 }
 .no-data-message {
-    margin-top: 1rem;
-    color: #888;
-    text-align: center;
-    padding: 2rem;
-    background-color: #f9f9f9;
-    border-radius: 4px;
+  margin-top: 1rem;
+  color: #888;
+  text-align: center;
+  padding: 2rem;
+  background-color: #f9f9f9;
+  border-radius: 4px;
 }
 </style>
