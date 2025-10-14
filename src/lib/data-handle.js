@@ -1,12 +1,4 @@
 import { XMLParser, XMLBuilder } from 'fast-xml-parser';
-import {
-  randomUUID,
-  randomInt,
-  pbkdf2Sync,
-  createCipheriv,
-  createDecipheriv,
-  randomBytes,
-} from 'crypto';
 
 // 常に配列としてパースする XML タグの一覧
 const alwaysArray = [
@@ -31,19 +23,44 @@ const builderOptions = {
   attributeNamePrefix: '_',
   format: true,               // 可読性の高いXMLを出力
 };
-
-// 暗号化関連の定数
-const ALGORITHM = 'aes-256-gcm';
-const IV_LENGTH = 12;             // GCMで推奨されるIV長 (96ビット)
-const SALT_LENGTH = 16;
-const KEY_LENGTH = 32;            // AES-256 のキー長 (256ビット)
-const AUTH_TAG_LENGTH = 16;
-const PBKDF2_ITERATIONS = 100000; // PBKDF2の反復回数
+const nonFormatBuilderOptions = {
+  ignoreAttributes: false,
+  attributeNamePrefix: '_',
+};
 
 // ヘルパー関数
 const getISOString = () => new Date().toISOString();
-const getRandomUUID = () => randomUUID();
-const getRandomInt = (min, max) => randomInt(min, max);
+const getRandomUUID = () => window.crypto.randomUUID();
+const getRandomInt = (min, max) => Math.floor(Math.random() * (1 + max - min)) + min;
+/** 
+ * Base64 文字列を ArrayBuffer に変換する
+ * @param {string} 対象となる Base64 文字列
+ * @return {ArrayBuffer} 変換された ArrayBuffer
+ */
+const base64ToArrayBuffer = (base64) => {
+  const binaryString = window.atob(base64);
+  const len = binaryString.length;
+  const bytes = new Uint8Array(len);
+  for (let i = 0; i < len; i++) {
+    bytes[i] = binaryString.charCodeAt(i);
+  }
+  return bytes.buffer;
+}
+/** 
+ * ArrayBuffer を Base64 文字列に変換する
+ * @param {ArrayBuffer} 対象となる ArrayBuffer
+ * @return {string} 変換された Base64 文字列
+ */
+const arrayBufferToBase64 = (buffer) => {
+  let binary = '';
+  const bytes = new Uint8Array(buffer);
+  const len = bytes.byteLength;
+  for (let i = 0; i < len; i++) {
+    binary += String.fromCharCode(bytes[i]);
+  }
+  return window.btoa(binary);
+}
+
 
 /**
  * @class DataHandle
@@ -51,52 +68,180 @@ const getRandomInt = (min, max) => randomInt(min, max);
  */
 class DataHandle {
   /**
-   * @param {string} xmlString - パースする XML 文字列
-   * @param {string} password - 復号に使用するパスワード
-   * @param {Uint8Array} iv - 復号に使用する初期化ベクトル
-   * @param {Uint8Array} salt - 復号に使用するソルト
+   * @param {object} [parsedXmlData=null] - パースされた XML データ、未指定の場合は新規作成
+   * @param {Uint8Array} saltBase64 - 復号に使用するソルト
    */
-  constructor(xmlString = '', password = null, iv = null, salt = null) {
+  constructor(parsedXmlData = null) {
     this.parser = new XMLParser(parserOptions);
     this.builder = new XMLBuilder(builderOptions);
+    this.nonFormatBuilder = new XMLBuilder(nonFormatBuilderOptions);
 
-    if (!xmlString) {
+    // 新規作成時は、データを初期化して終了
+    if (!parsedXmlData) {
       this.data = this._createInitialData();
       return;
     }
-
-    this.data = this.parser.parse(xmlString);
-
-    // is_encryptedがtrueで、復号に必要な情報がすべて提供されている場合に復号処理を実行
-    if (this.data.root.head.is_encrypted && password && iv && salt) {
-      try {
-        const encryptedBodyB64 = this.data.root.body;
-        const encryptedBodyWithAuthTag = Buffer.from(encryptedBodyB64, 'base64');
-        
-        // 認証タグと暗号化されたデータを分離
-        const authTag = encryptedBodyWithAuthTag.slice(-AUTH_TAG_LENGTH);
-        const encryptedBody = encryptedBodyWithAuthTag.slice(0, -AUTH_TAG_LENGTH);
-
-        // パスワードからキーを導出
-        const key = pbkdf2Sync(password, salt, PBKDF2_ITERATIONS, KEY_LENGTH, 'sha512');
-        
-        const decipher = createDecipheriv(ALGORITHM, key, iv);
-        decipher.setAuthTag(authTag);
-        // AAD (追加認証データ) を設定
-        decipher.setAAD(Buffer.from(this.data.root.head.file_id, 'utf8'));
-
-        let decryptedBodyXml = decipher.update(encryptedBody, null, 'utf8');
-        decryptedBodyXml += decipher.final('utf8');
-        
-        // 復号したXML (body部分) をパースして、元のデータにマージする
-        const decryptedData = this.parser.parse(decryptedBodyXml);
-        this.data.root.body = decryptedData.body;
-
-      } catch (error) {
-        console.error('Decryption failed:', error);
-        throw new Error('Failed to decrypt data. Check password or data integrity.');
-      }
+    // データが注入されたらそのまま代入する
+    else {
+      this.data = parsedXmlData;
     }
+  }
+
+  /**
+   * XML データをインポートして、パースする
+   * @param {string} xmlString XML データ
+   * @param {string} [completePassword=null] 複合化のためのパスワード（暗号化してる場合に必要）
+   * @param {string} [ivBase64=null] 初期ベクトル （暗号化してる場合に必要）
+   * @param {string} [saltBase64=null] ソルト（暗号化してる場合に必要） 
+   * @return {DataHandle} DataHandle インスタンス
+   */
+  static async import(xmlString, password = null, ivBase64 = null, saltBase64 = null) {
+    // 1. 初回のパース
+    const data = this.parser.parse(xmlString);
+
+    // 2-1. 暗号化がオフの場合はそのまま DataHandle インスタンスを返す
+    if (!data.root.head.is_encrypted) return new DataHandle(data);
+
+    // 2-2. 暗号化がオンでも、必要な情報が足りなかったらエラーを起こす
+    else if (!password || !ivBase64 || !saltBase64) throw new Error('password, ivBase64 and saltBase64 are required.');
+
+    // 2-3. 暗号化がオンで、復号に必要な情報がすべて提供されている場合に復号処理を実行
+    try {
+      const iv = base64ToArrayBuffer(ivBase64);
+      const salt = base64ToArrayBuffer(saltBase64);
+      const bodyXml = await this._decrypt(data.root.body.trim(), iv, salt, password, data.root.head.file_id);
+
+      // 復号したXML (body部分) をパースして、元のデータにマージする
+      data.root.body = this.parser.parse(bodyXml);
+
+      return new DataHandle(data);
+    } catch (error) {
+      throw new Error('Failed to decrypt data.');
+    }
+  }
+
+  /**
+   * XML データをビルドして、エクスポートする
+   * @param {string} [password=null] 暗号化のためのパスワード（暗号化する場合に必要）
+   * @return {{ xml: string, ivBase64: string, saltBase64: string }} エクスポート情報
+   */
+  async export(password = null) {
+    // 0. 更新日時を更新する
+    this.data.root.head.updated_at = getISOString();
+
+    // 1-1. 暗号化がオフの場合はそのままビルドする
+    if (!this.data.root.head.is_encrypted) {
+      return this.builder.build(this.data);
+    }
+    // 1-2. 暗号化がオンでも、パスワードがなければエラーを起こす
+    else if (!password) throw new Error('password is required.');
+    // 1-3. 暗号化がオンで、パスワードがあれば、暗号化処理を実行
+    const targetXml = this.nonFormatBuilder.build(this.data.root.body);
+    const { iv, salt, cipher } = await this._encrypt(targetXml, password, this.data.root.head.file_id);
+
+    // 2. 暗号化されたデータを含めて再度 XML をビルド
+    const exportData = {
+      root: {
+        head: this.data.root.head,
+        body: cipher,
+      },
+    };
+    const exportXml = this.builder.build(exportData);
+
+    // 3. XML、iv（Base64）、salt（Base64）を返す
+    return {
+      xml: exportXml,
+      ivBase64: arrayBufferToBase64(iv),
+      saltBase64: arrayBufferToBase64(salt),
+    }
+  }
+
+  /** AES の鍵を導出する
+   * @param {ArrayBuffer|TypedArray} password
+   * @param {ArrayBuffer|TypedArray} salt
+   * @returns {CryptoKey} AES-256-GCM の鍵
+   */
+  async _deriveKey(password, salt) {
+    const passwordKey = await window.crypto.subtle.importKey('raw', password, 'PBKDF2', false, ['deriveKey']);
+    const algorithm = {
+      name: 'PBKDF2',
+      salt,
+      iterations: 200000,
+      hash: 'SHA-256',
+    }
+    const derivedKeyAlgorithm = {
+      name: 'AES-GCM',
+      length: 256,
+    }
+    return await window.crypto.subtle.deriveKey(algorithm, passwordKey, derivedKeyAlgorithm, true, ['encrypt', 'decrypt']);
+  }
+
+  /** パスワードを用いて文字列を暗号化する
+   * @param {string} message 暗号化するメッセージ
+   * @param {string} password パスワード
+   * @param {string} additionalAuthenticatedData 追加認証データ
+   * @return {{cipher: ArrayBuffer, iv: Uint8Array, salt: Uint8Array}} 暗号化データ
+   */
+  async _encrypt(message, password, additionalAuthenticatedData) {
+    // パスワードを TypedArray に
+    const pwd = new TextEncoder().encode(password);
+    // メッセージを TypedArray に
+    const msg = new TextEncoder().encode(message);
+    // 追加認証データを TypedArray に
+    const aad = new TextEncoder().encode(additionalAuthenticatedData);
+
+    // 鍵導出用のsaltを生成
+    const salt = window.crypto.getRandomValues(new Uint8Array(16));
+
+    // パスワードとsaltから鍵を導出する
+    const key = await this._deriveKey(pwd, salt);
+
+    // 初期化ベクトルを生成
+    const iv = window.crypto.getRandomValues(new Uint8Array(12));
+
+    // 暗号化を実行
+    const algorithm = {
+      name: 'AES-GCM',
+      iv: iv,
+      tagLength: 128,       // GCMモードの改ざんチェック用データの長さ
+      additionalData: aad,  // GCMモードのAAD（追加認証データ）
+    }
+    const cipher = await window.crypto.subtle.encrypt(algorithm, key, msg);
+
+    // IV, salt, 暗号文を出力
+    return {
+      iv,
+      salt,
+      cipher
+    }
+  }
+
+  /** 暗号文を salt、iv、パスワードで複合化する
+   * @param {ArrayBuffer} cipher 暗号文
+   * @param {Uint8Array} iv 初期ベクトル
+   * @param {Uint8Array} salt ソルト
+   * @param {string} password パスワード
+   * @param {string} additionalAuthenticatedData 追加認証データ
+   * @returns {string} 復号されたメッセージ
+   */
+  async _decrypt(cipher, iv, salt, password, additionalAuthenticatedData) {
+    // パスワードを TypedArray に
+    const pwd = new TextEncoder().encode(password);
+    // 追加認証データを TypedArray に
+    const aad = new TextEncoder().encode(additionalAuthenticatedData);
+
+    // パスワードとsaltから鍵を導出する
+    const key = await this._deriveKey(pwd, salt);
+
+    // 復号する
+    const algorithm = {
+      name: "AES-GCM",
+      iv,
+      tagLength: 128,
+      additionalData: aad,
+    }
+    const buffer = await window.crypto.subtle.decrypt(algorithm, key, cipher);
+    return new TextDecoder().decode(buffer);
   }
 
   /**
@@ -109,7 +254,7 @@ class DataHandle {
     return {
       root: {
         head: {
-          file_id: `HPLS-${getRandomUUID()}`,
+          file_id: `HPL-${getRandomUUID()}`,
           file_version: '1.0',
           file_title: '',
           file_description: '',
@@ -131,68 +276,11 @@ class DataHandle {
   }
 
   /**
-   * 現在のデータを XML 文字列としてビルドする
-   * @returns {string} XML 文字列
+   * 現在のデータを XML 文字列としてビルドしてコンソールに表示する
    */
-  build() {
-    // 更新日時を現在時刻に設定
-    this.data.root.head.updated_at = getISOString();
-    return this.builder.build(this.data);
-  }
-
-  /**
-   * body 部分を暗号化して XML 全体をビルドする
-   * @param {string} password - 暗号化に使用するパスワード
-   * @returns {{xml: string, iv: Uint8Array, salt: Uint8Array}} 暗号化された XML 文字列、IV、salt
-   */
-  buildWithEncryption(password) {
-    if (!password) {
-      throw new Error('Password is required for encryption.');
-    }
-
-    // 1. 暗号化の準備 (saltとivを生成)
-    const salt = randomBytes(SALT_LENGTH);
-    const iv = randomBytes(IV_LENGTH);
-
-    // 2. パスワードからキーを導出
-    const key = pbkdf2Sync(password, salt, PBKDF2_ITERATIONS, KEY_LENGTH, 'sha512');
-
-    // 3. body部分のみをXML文字列としてビルド
-    const bodyBuilder = new XMLBuilder({ format: false, ...builderOptions });
-    const bodyXml = this.builder.build({ body: this.data.root.body });
-    
-    // 4. 暗号化処理
-    const cipher = createCipheriv(ALGORITHM, key, iv);
-    cipher.setAAD(Buffer.from(this.data.root.head.file_id, 'utf8'));
-    
-    const encryptedBody = Buffer.concat([
-      cipher.update(bodyXml, 'utf8'),
-      cipher.final(),
-    ]);
-    const authTag = cipher.getAuthTag();
-    
-    const encryptedBodyWithAuthTag = Buffer.concat([encryptedBody, authTag]);
-
-    // 5. 元のデータを破壊しないように、bodyを一時的に退避・置換
-    const originalBody = this.data.root.body;
-    try {
-      this.data.root.head.is_encrypted = true;
-      this.data.root.body = encryptedBodyWithAuthTag.toString('base64');
-      
-      // 6. 全体をビルド (buildメソッド内でupdated_atが更新される)
-      const finalXml = this.build();
-
-      // 7. 生成したivとsaltを返却
-      return {
-        xml: finalXml,
-        iv: new Uint8Array(iv),
-        salt: new Uint8Array(salt),
-      };
-    } finally {
-      // 8. 処理後、元のbodyオブジェクトに戻す
-      this.data.root.body = originalBody;
-      this.data.root.head.is_encrypted = false; // 状態を元に戻す
-    }
+  testBuild() {
+    const xml = this.builder.build(this.data);
+    console.log(xml);
   }
 
   /**

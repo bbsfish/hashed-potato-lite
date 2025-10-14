@@ -4,9 +4,6 @@
       <div class="logo"><router-link :to="{ name: 'Home' }">Hashed Potato Lite</router-link></div>
       <nav>
         <router-link :to="{ name: 'PasswordGenerator' }">パスワード生成</router-link>
-        <router-link :to="{ name: 'LocalFileViewer' }">ファイル表示</router-link>
-        <router-link :to="{ name: 'LocalFileEditor' }">ファイル編集</router-link>
-        <router-link :to="{ name: 'BrowserSetting' }" title="設定"><IconGear class="icon-gear" /></router-link>
       </nav>
     </div>
     <div class="toggle-button" @click="toggleHeader" title="ヘッダーの表示切り替え">
