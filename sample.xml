@@ -1,3 +1,4 @@
+<?xml version="1.0"?>
 <root>
   <head>
     <file_id>HLPS-5fb27fe1-49be-4519-8e47-b432233e5be4</file_id>
@@ -8,11 +9,8 @@
     <updated_at>2025-10-10T01:58:18.922Z</updated_at>
     <is_encrypted>false</is_encrypted>
     <options>
-    	<column_alias>
-        <col>
-          <id>status</id>
-          <alias>ST</alias>
-        </col>
+      <column_alias>
+        <col id="status">ST</col>
       </column_alias>
       <column_order>
         <col>status</col>
@@ -37,10 +35,7 @@
   </head>
   <body>
   	<sequence>
-  		<table>
-  			<id>TBL-5970</id>
-  			<sn>4</sn>
-  		<table>
+  		<table id="TBL-5970">4</table>
   	</sequence>
     <tables>
       <table>
@@ -103,9 +98,9 @@
               <sec_code>000</sec_code>
               <expiration>01.20</expiration>
               <related_numbers>
-                <nm>X Management Number<nm>
+                <nm>X Management Number</nm>
                 <text>XX-0000-0000</text>
-              <related_numbers>
+              </related_numbers>
             </credit>
             <memo>
               <nm>Note</nm>
@@ -119,7 +114,7 @@
             <number>123456</number>
             <text>hello</text>
             <link>
-              <table>TBL-5970<table>
+              <table>TBL-5970</table>
               <sn>1</sn>
             </link>
             <group>

@@ -1,5 +1,12 @@
 import { XMLParser, XMLBuilder } from 'fast-xml-parser';
-import { randomUUID, randomInt } from 'crypto';
+import {
+  randomUUID,
+  randomInt,
+  pbkdf2Sync,
+  createCipheriv,
+  createDecipheriv,
+  randomBytes,
+} from 'crypto';
 
 // 常に配列としてパースする XML タグの一覧
 const alwaysArray = [
@@ -25,6 +32,14 @@ const builderOptions = {
   format: true,               // 可読性の高いXMLを出力
 };
 
+// 暗号化関連の定数
+const ALGORITHM = 'aes-256-gcm';
+const IV_LENGTH = 12;             // GCMで推奨されるIV長 (96ビット)
+const SALT_LENGTH = 16;
+const KEY_LENGTH = 32;            // AES-256 のキー長 (256ビット)
+const AUTH_TAG_LENGTH = 16;
+const PBKDF2_ITERATIONS = 100000; // PBKDF2の反復回数
+
 // ヘルパー関数
 const getISOString = () => new Date().toISOString();
 const getRandomUUID = () => randomUUID();
@@ -35,12 +50,53 @@ const getRandomInt = (min, max) => randomInt(min, max);
  * @description XMLデータのパース、ビルド、基本操作を行うベースクラス
  */
 class DataHandle {
-  constructor(xmlString = '') {
+  /**
+   * @param {string} xmlString - パースする XML 文字列
+   * @param {string} password - 復号に使用するパスワード
+   * @param {Uint8Array} iv - 復号に使用する初期化ベクトル
+   * @param {Uint8Array} salt - 復号に使用するソルト
+   */
+  constructor(xmlString = '', password = null, iv = null, salt = null) {
     this.parser = new XMLParser(parserOptions);
     this.builder = new XMLBuilder(builderOptions);
 
-    if (xmlString) this.data = this.parser.parse(xmlString);
-    else this.data = this._createInitialData();
+    if (!xmlString) {
+      this.data = this._createInitialData();
+      return;
+    }
+
+    this.data = this.parser.parse(xmlString);
+
+    // is_encryptedがtrueで、復号に必要な情報がすべて提供されている場合に復号処理を実行
+    if (this.data.root.head.is_encrypted && password && iv && salt) {
+      try {
+        const encryptedBodyB64 = this.data.root.body;
+        const encryptedBodyWithAuthTag = Buffer.from(encryptedBodyB64, 'base64');
+        
+        // 認証タグと暗号化されたデータを分離
+        const authTag = encryptedBodyWithAuthTag.slice(-AUTH_TAG_LENGTH);
+        const encryptedBody = encryptedBodyWithAuthTag.slice(0, -AUTH_TAG_LENGTH);
+
+        // パスワードからキーを導出
+        const key = pbkdf2Sync(password, salt, PBKDF2_ITERATIONS, KEY_LENGTH, 'sha512');
+        
+        const decipher = createDecipheriv(ALGORITHM, key, iv);
+        decipher.setAuthTag(authTag);
+        // AAD (追加認証データ) を設定
+        decipher.setAAD(Buffer.from(this.data.root.head.file_id, 'utf8'));
+
+        let decryptedBodyXml = decipher.update(encryptedBody, null, 'utf8');
+        decryptedBodyXml += decipher.final('utf8');
+        
+        // 復号したXML (body部分) をパースして、元のデータにマージする
+        const decryptedData = this.parser.parse(decryptedBodyXml);
+        this.data.root.body = decryptedData.body;
+
+      } catch (error) {
+        console.error('Decryption failed:', error);
+        throw new Error('Failed to decrypt data. Check password or data integrity.');
+      }
+    }
   }
 
   /**
@@ -82,6 +138,61 @@ class DataHandle {
     // 更新日時を現在時刻に設定
     this.data.root.head.updated_at = getISOString();
     return this.builder.build(this.data);
+  }
+
+  /**
+   * body 部分を暗号化して XML 全体をビルドする
+   * @param {string} password - 暗号化に使用するパスワード
+   * @returns {{xml: string, iv: Uint8Array, salt: Uint8Array}} 暗号化された XML 文字列、IV、salt
+   */
+  buildWithEncryption(password) {
+    if (!password) {
+      throw new Error('Password is required for encryption.');
+    }
+
+    // 1. 暗号化の準備 (saltとivを生成)
+    const salt = randomBytes(SALT_LENGTH);
+    const iv = randomBytes(IV_LENGTH);
+
+    // 2. パスワードからキーを導出
+    const key = pbkdf2Sync(password, salt, PBKDF2_ITERATIONS, KEY_LENGTH, 'sha512');
+
+    // 3. body部分のみをXML文字列としてビルド
+    const bodyBuilder = new XMLBuilder({ format: false, ...builderOptions });
+    const bodyXml = this.builder.build({ body: this.data.root.body });
+    
+    // 4. 暗号化処理
+    const cipher = createCipheriv(ALGORITHM, key, iv);
+    cipher.setAAD(Buffer.from(this.data.root.head.file_id, 'utf8'));
+    
+    const encryptedBody = Buffer.concat([
+      cipher.update(bodyXml, 'utf8'),
+      cipher.final(),
+    ]);
+    const authTag = cipher.getAuthTag();
+    
+    const encryptedBodyWithAuthTag = Buffer.concat([encryptedBody, authTag]);
+
+    // 5. 元のデータを破壊しないように、bodyを一時的に退避・置換
+    const originalBody = this.data.root.body;
+    try {
+      this.data.root.head.is_encrypted = true;
+      this.data.root.body = encryptedBodyWithAuthTag.toString('base64');
+      
+      // 6. 全体をビルド (buildメソッド内でupdated_atが更新される)
+      const finalXml = this.build();
+
+      // 7. 生成したivとsaltを返却
+      return {
+        xml: finalXml,
+        iv: new Uint8Array(iv),
+        salt: new Uint8Array(salt),
+      };
+    } finally {
+      // 8. 処理後、元のbodyオブジェクトに戻す
+      this.data.root.body = originalBody;
+      this.data.root.head.is_encrypted = false; // 状態を元に戻す
+    }
   }
 
   /**
@@ -226,7 +337,7 @@ class BodyData extends DataHandle {
       seq['#text'] += 1;
       return seq['#text'];
     }
-    throw new Error(`Sequence for table ID "${tableId}" not found.`);
+    throw new Error(`Sequence for table ID '${tableId}' not found.`);
   }
 }
 
@@ -241,7 +352,7 @@ class TableData extends BodyData {
     this.tableId = tableId;
     this.table = this.body.tables.table.find((t) => t.thead.id === tableId);
     if (!this.table) {
-      throw new Error(`Table with ID "${tableId}" not found.`);
+      throw new Error(`Table with ID '${tableId}' not found.`);
     }
   }
 
@@ -311,7 +422,7 @@ class AccountData extends TableData {
     this.sn = sn;
     this.account = this.table.tbody.ac.find((a) => a.sn === sn);
     if (!this.account) {
-      throw new Error(`Account with SN "${sn}" not found in table "${tableId}".`);
+      throw new Error(`Account with SN '${sn}' not found in table '${tableId}'.`);
     }
   }
 
