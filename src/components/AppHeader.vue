@@ -6,7 +6,7 @@
         <router-link :to="{ name: 'PasswordGenerator' }">パスワード生成</router-link>
         <router-link :to="{ name: 'LocalFileViewer' }">ファイル表示</router-link>
         <router-link :to="{ name: 'LocalFileEditor' }">ファイル編集</router-link>
-        <router-link :to="{ name: 'BrowserSetting' }"><IconGear /></router-link>
+        <router-link :to="{ name: 'BrowserSetting' }" title="設定"><IconGear class="icon-gear" /></router-link>
       </nav>
     </div>
     <div class="toggle-button" @click="toggleHeader" title="ヘッダーの表示切り替え">
@@ -73,14 +73,18 @@ export default {
   font-weight: 700;
   font-style: normal;
   font-size: 1.5rem;
-  text-decoration: none;
   color: var.$text-color;
+  a {
+    text-decoration: none;
+  }
 }
 
 nav {
   display: flex;
   gap: 1.5rem;
   a {
+    display: flex;
+    align-items: center;
     text-decoration: none;
     color: var.$text-muted-color;
     font-weight: 500;
@@ -94,6 +98,12 @@ nav {
       color: var.$button-color;
       font-weight: bold;
     }
+  }
+}
+
+.icon-gear {
+  &:hover {
+    transform: rotate(45deg);
   }
 }
 

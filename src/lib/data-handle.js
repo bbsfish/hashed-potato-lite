@@ -1,352 +1,355 @@
 import { XMLParser, XMLBuilder } from 'fast-xml-parser';
+import { randomUUID, randomInt } from 'crypto';
 
+// 常に配列としてパースする XML タグの一覧
+const alwaysArray = [
+  'root.head.options.column_alias.col',
+  'root.head.options.column_order.col',
+  'root.head.options.invisible_columns.col',
+  'root.body.sequence.table',
+  'root.body.tables.table',
+  'root.body.tables.table.tbody.ac',
+];
+
+// XML パーサーとビルダーのオプション設定
+const parserOptions = {
+  ignoreAttributes: false,    // 属性値を有効化
+  attributeNamePrefix: '_',   // 属性のプレフィックスを設定
+  isArray: (_, tagPath) => {
+    return alwaysArray.includes(tagPath);
+  },
+};
+const builderOptions = {
+  ignoreAttributes: false,
+  attributeNamePrefix: '_',
+  format: true,               // 可読性の高いXMLを出力
+};
+
+// ヘルパー関数
+const getISOString = () => new Date().toISOString();
+const getRandomUUID = () => randomUUID();
+const getRandomInt = (min, max) => randomInt(min, max);
+
+/**
+ * @class DataHandle
+ * @description XMLデータのパース、ビルド、基本操作を行うベースクラス
+ */
 class DataHandle {
-  constructor() {
-    const alwaysArray = [
-      'root.body.tables.table_data',
-      'root.body.tables.table_data.tbody.accounts.account_data',
-      'root.body.tables.table_data.tbody.emails.email_data',
-      'root.body.tables.table_data.tbody.passwords.password_data',
-    ];
-    this.parser = new XMLParser({
-      ignoreAttributes: false,
-      attributeNamePrefix: '@_',
-      format: true,
-      isArray: (name, jpath) => alwaysArray.includes(jpath),
-    });
-    this.builder = new XMLBuilder({
-      ignoreAttributes: false,
-      attributeNamePrefix: '@_',
-      format: true,
-      suppressEmptyNode: true,
-    });
-    this.jsonData = null;
+  constructor(xmlString = '') {
+    this.parser = new XMLParser(parserOptions);
+    this.builder = new XMLBuilder(builderOptions);
+
+    if (xmlString) this.data = this.parser.parse(xmlString);
+    else this.data = this._createInitialData();
   }
 
   /**
-   * XMLデータをインポートしてJSONデータに変換する
-   * @param {string} xmlData - XML形式の文字列データ
+   * 初期データ構造を生成する
+   * @private
+   * @returns {object} 初期データオブジェクト
    */
-  importXml(xmlData) {
-    try {
-      this.jsonData = this.parser.parse(xmlData);
-      // last_accessed_at を更新
-      this.updateLastAccessed();
-    } catch (error) {
-      console.error('XML parsing error:', error);
-      this.jsonData = null;
-    }
-  }
-
-  /**
-   * 現在のJSONデータをXML文字列としてエクスポートする
-   * @returns {string|null} XML形式の文字列データ、またはデータがない場合はnull
-   */
-  exportXml() {
-    if (!this.jsonData) return null;
-    try {
-      return this.builder.build(this.jsonData);
-    } catch (error) {
-      console.error('XML building error:', error);
-      return null;
-    }
-  }
-
-  /**
-   * 新しいデータ構造を作成する
-   * @param {boolean} encryptionEnabled - 暗号化が有効かどうか
-   */
-  createNewData(encryptionEnabled = false) {
-    const now = new Date().toISOString();
-    this.jsonData = {
+  _createInitialData() {
+    const now = getISOString();
+    return {
       root: {
         head: {
-          file_id: `STR-${crypto.randomUUID()}`,
+          file_id: `HPLS-${getRandomUUID()}`,
+          file_version: '1.0',
+          file_title: '',
+          file_description: '',
           created_at: now,
           updated_at: now,
-          last_accessed_at: now,
-          encryption_enabled: encryptionEnabled,
+          is_encrypted: false,
+          options: {
+            column_alias: { col: [] },
+            column_order: { col: [] },
+            invisible_columns: { col: [] },
+          },
         },
         body: {
-          tables: {
-            table_data: [],
-          },
+          sequence: { table: [] },
+          tables: { table: [] },
         },
       },
     };
   }
 
   /**
-   * ファイルの更新日時と最終アクセス日時を更新する
-   * @private
+   * 現在のデータを XML 文字列としてビルドする
+   * @returns {string} XML 文字列
    */
-  _updateTimestamps() {
-    const now = new Date().toISOString();
-    this.jsonData.root.head.updated_at = now;
-    this.jsonData.root.head.last_accessed_at = now;
+  build() {
+    // 更新日時を現在時刻に設定
+    this.data.root.head.updated_at = getISOString();
+    return this.builder.build(this.data);
   }
 
   /**
-   * 最終アクセス日時を更新する
+   * HeadData のインスタンスを取得する
+   * @returns {HeadData}
    */
-  updateLastAccessed() {
-    if (this.jsonData && this.jsonData.root && this.jsonData.root.head) {
-      this.jsonData.root.head.last_accessed_at = new Date().toISOString();
-    }
+  getHead() {
+    return new HeadData(this.data);
   }
 
   /**
-   * 新しいテーブルを作成する
-   * @param {string} tableName - 新しいテーブルの名前
-   * @param {boolean} encryptionEnabled - 暗号化が有効かどうか
-   * @returns {string|null} 作成されたテーブルのID、または失敗した場合はnull
+   * BodyData のインスタンスを取得する
+   * @returns {BodyData}
    */
-  createTable(tableName, encryptionEnabled = false) {
-    if (!this.jsonData) return null;
+  getBody() {
+    return new BodyData(this.data);
+  }
+}
 
-    if (!this.jsonData.root.body.tables) {
-        this.jsonData.root.body.tables = { table_data: [] };
-    } else if (!Array.isArray(this.jsonData.root.body.tables.table_data)) {
-        this.jsonData.root.body.tables.table_data = [];
-    }
+/**
+ * @class HeadData
+ * @description XMLのhead部分を操作するクラス
+ * @extends DataHandle
+ */
+class HeadData extends DataHandle {
+  constructor(data) {
+    super();
+    this.data = data;
+    this.head = this.data.root.head;
+  }
 
-    const now = new Date().toISOString();
-    const tableId = `TBL-${String(Math.floor(Math.random() * 9000) + 1000)}`;
+  // 各プロパティのゲッターとセッター
+  get fileId() { return this.head.file_id; }
+  get fileVersion() { return this.head.file_version; }
+  set fileVersion(value) { this.head.file_version = value; }
+  get fileTitle() { return this.head.file_title; }
+  set fileTitle(value) { this.head.file_title = value; }
+  get fileDescription() { return this.head.file_description; }
+  set fileDescription(value) { this.head.file_description = value; }
+  get createdAt() { return this.head.created_at; }
+  get updatedAt() { return this.head.updated_at; }
+  get isEncrypted() { return this.head.is_encrypted; }
+  set isEncrypted(value) { this.head.is_encrypted = value; }
 
-    const defaultColumnOrder = [
-        'serial_number', 'service_name', 'user_id', 'website_url',
-        'email_count', 'password_count', 'note',
-        'status', 'category', 'service_name_initial',
-        'service_description', 'created_at', 'updated_at'
-    ];
+  // options 関連の操作
+  getOptions() { return this.head.options; }
+  setColumnAlias(columnId, alias) {
+    // 設定が存在するかチェック
+    const index = this.head.options.column_alias.col.findIndex((c) => c._id === columnId);
+    // 存在しない場合は追加して、存在する場合は上書き
+    if (index === -1) this.head.options.column_alias.col.push({ _id: columnId, '#text': alias });
+    else this.head.options.column_alias.col[index]['#text'] = alias;
+  }
+  removeColumnAlias(columnId) {
+    this.head.options.column_alias.col = this.head.options.column_alias.col.filter((c) => c._id !== columnId);
+  }
+  clearColumnAlias() { this.head.options.column_alias.col = []; }
+  setColumnOrder(order) { this.head.options.column_order.col = order; }
+  clearColumnOrder() { this.head.options.column_order.col = []; }
+  setInvisibleColumn(columnId) {
+    // 設定が存在するかチェック
+    const index = this.head.options.invisible_columns.col.findIndex((c) => c._id === columnId);
+    // 存在しない場合のみ追加
+    if (index === -1) this.head.options.invisible_columns.col.push(columnId);
+  }
+  removeInvisibleColumn(columnId) {
+    this.head.options.invisible_columns.col = this.head.options.invisible_columns.col.filter((c) => c._id !== columnId);
+  }
+  clearInvisibleColumns() { this.head.options.invisible_columns.col = []; }
+}
+
+/**
+ * @class BodyData
+ * @description XMLのbody部分を操作するクラス
+ * @extends DataHandle
+ */
+class BodyData extends DataHandle {
+  constructor(data) {
+    super();
+    this.data = data;
+    this.body = this.data.root.body;
+  }
+
+  /**
+   * テーブルを追加する
+   * @param {string} tableName テーブル名
+   * @param {string} tableSummary テーブル概要
+   * @returns {TableData} 追加されたテーブルの TableData インスタンス
+   */
+  addTable(tableName = '', tableSummary = '') {
+    const now = getISOString();
+
+    // 一意のテーブル ID が生成されるまで繰り返す
+    let tableId = '';
+    do {
+      tableId = `TBL-${String(getRandomInt(1000, 9999))}`;
+    } while (this.body.sequence.table.some((t) => t._id === tableId));
 
     const newTable = {
       thead: {
-        table_name: tableName,
-        table_id: tableId,
-        created_at: now,
-        updated_at: now,
-        encryption_enabled: encryptionEnabled,
-        column_order: { col: defaultColumnOrder }, // 列順を保存
+        id: tableId,
+        nm: tableName,
+        sm: tableSummary,
+        ca: now,
+        ua: now,
       },
-      tbody: {
-        accounts: { account_data: [] },
-        emails: { email_data: [] },
-        passwords: { password_data: [] },
-      },
+      tbody: { ac: [] },
     };
 
-    this.jsonData.root.body.tables.table_data.push(newTable);
-    this._updateTimestamps();
-    return tableId;
+    this.body.tables.table.push(newTable);
+    this.body.sequence.table.push({ _id: tableId, '#text': 0 });
+
+    return new TableData(this.data, tableId);
   }
 
   /**
-   * テーブルを更新する
-   * @param {string} tableId - 更新するテーブルのID
-   * @param {object} updates - 更新する情報
-   * @returns {boolean} 成功した場合はtrue、失敗した場合はfalse
+   * テーブル ID でテーブルを取得する
+   * @param {string} tableId 
+   * @returns {TableData|null}
    */
-  updateTable(tableId, updates) {
-    const table = this._findTable(tableId);
-    if (!table) return false;
-    
-    // updatesにcolumn_orderが含まれている場合、適切にラップする
-    if (updates.column_order && Array.isArray(updates.column_order)) {
-      updates.column_order = { col: updates.column_order };
-    }
-
-    Object.assign(table.thead, updates);
-    table.thead.updated_at = new Date().toISOString();
-    this._updateTimestamps();
-    return true;
+  getTableById(tableId) {
+    const tableExists = this.body.sequence.table.some((t) => t._id === tableId);
+    return tableExists ? new TableData(this.data, tableId) : null;
   }
 
   /**
-   * テーブルを削除する
-   * @param {string} tableId - 削除するテーブルのID
-   * @returns {boolean} 成功した場合はtrue、失敗した場合はfalse
+   * すべてのテーブルを取得する
+   * @returns {TableData[]}
    */
-  deleteTable(tableId) {
-    if (!this.jsonData) return false;
-    const tables = this.jsonData.root.body.tables.table_data;
-    const index = tables.findIndex(t => t.thead.table_id === tableId);
-
-    if (index === -1) return false;
-
-    tables.splice(index, 1);
-    this._updateTimestamps();
-    return true;
+  getTables() {
+    return this.body.sequence.table.map((t) => new TableData(this.data, t._id));
   }
 
   /**
-   * 新しいアカウントデータを追加する
-   * @param {string} tableId - 追加先のテーブルID
-   * @param {object} accountData - 追加するアカウントデータ
-   * @returns {number|null} 作成されたアカウントのシリアルナンバー、または失敗した場合はnull
+   * テーブルの新しいシリアル番号を取得し、更新する
+   * @param {string} tableId 
+   * @returns {number}
    */
-  createAccount(tableId, accountData) {
-    const table = this._findTable(tableId);
-    if (!table) return null;
+  _getNewSerialNumber(tableId) {
+    const seq = this.body.sequence.table.find((t) => t._id === tableId);
+    if (seq) {
+      seq['#text'] += 1;
+      return seq['#text'];
+    }
+    throw new Error(`Sequence for table ID "${tableId}" not found.`);
+  }
+}
 
-    if (!table.tbody) {
-        table.tbody = { accounts: { account_data: [] }, emails: { email_data: [] }, passwords: { password_data: [] } };
+/**
+ * @class TableData
+ * @description 特定のテーブルを操作するクラス
+ * @extends BodyData
+ */
+class TableData extends BodyData {
+  constructor(data, tableId) {
+    super(data);
+    this.tableId = tableId;
+    this.table = this.body.tables.table.find((t) => t.thead.id === tableId);
+    if (!this.table) {
+      throw new Error(`Table with ID "${tableId}" not found.`);
     }
-    if (!table.tbody.accounts) {
-        table.tbody.accounts = { account_data: [] };
-    }
-    if (!Array.isArray(table.tbody.accounts.account_data)) {
-        table.tbody.accounts.account_data = [];
+  }
+
+  /**
+   * アカウントを追加する
+   * @param {object} accountInfo - アカウント情報
+   * @returns {AccountData}
+   */
+  addAccount(accountInfo) {
+    const requiredFields = ['nm', 'it', 'ct', 'sm', 'st'];
+    for (const field of requiredFields) {
+      if (!accountInfo.hasOwnProperty(field)) {
+        throw new Error(`Missing required field in account data: ${field}`);
+      }
     }
 
-    const accounts = table.tbody.accounts.account_data;
-    const serialNumber = accounts.length > 0 ? Math.max(...accounts.map(a => a.serial_number)) + 1 : 1;
-    const now = new Date().toISOString();
+    const now = getISOString();
+    const newSn = this._getNewSerialNumber(this.tableId);
 
     const newAccount = {
-      serial_number: serialNumber,
-      ...accountData,
-      created_at: now,
-      updated_at: now,
+      sn: newSn,
+      ca: now,
+      ua: now,
+      ...accountInfo
     };
 
-    accounts.push(newAccount);
-    table.thead.updated_at = now;
-    this._updateTimestamps();
-    return serialNumber;
+    this.table.tbody.ac.push(newAccount);
+    this.table.thead.ua = now; // テーブルの更新日時を更新
+
+    return new AccountData(this.data, this.tableId, newSn);
+  }
+
+  /**
+   * シリアル番号でアカウントを取得する
+   * @param {number} sn 
+   * @returns {AccountData|null}
+   */
+  getAccountBySn(sn) {
+    const accountExists = this.table.tbody.ac.some((a) => a.sn === sn);
+    return accountExists ? new AccountData(this.data, this.tableId, sn) : null;
+  }
+
+  /**
+   * テーブル内のすべてのアカウントを取得する
+   * @returns {AccountData[]}
+   */
+  getAccounts() {
+    return this.table.tbody.ac.map((a) => new AccountData(this.data, this.tableId, a.sn)) || [];
+  }
+
+  // テーブルメタデータのゲッター
+  get name() { return this.table.thead.nm; }
+  get summary() { return this.table.thead.sm; }
+  get id() { return this.table.thead.id; }
+  get createdAt() { return this.table.thead.ca; }
+  get updatedAt() { return this.table.thead.ua; }
+}
+
+/**
+ * @class AccountData
+ * @description 特定のアカウントを操作するクラス
+ * @extends TableData
+ */
+class AccountData extends TableData {
+  constructor(data, tableId, sn) {
+    super(data, tableId);
+    this.sn = sn;
+    this.account = this.table.tbody.ac.find((a) => a.sn === sn);
+    if (!this.account) {
+      throw new Error(`Account with SN "${sn}" not found in table "${tableId}".`);
+    }
   }
 
   /**
    * アカウントデータを更新する
-   * @param {string} tableId - テーブルID
-   * @param {number} serialNumber - アカウントのシリアルナンバー
-   * @param {object} updates - 更新する情報
-   * @returns {boolean} 成功した場合はtrue、失敗した場合はfalse
+   * @param {object} newInfo - 更新する情報
    */
-  updateAccount(tableId, serialNumber, updates) {
-    const account = this._findAccount(tableId, serialNumber);
-    if (!account) return false;
-
-    Object.assign(account, updates);
-    account.updated_at = new Date().toISOString();
-    this._findTable(tableId).thead.updated_at = new Date().toISOString();
-    this._updateTimestamps();
-    return true;
+  update(newInfo) {
+    Object.assign(this.account, newInfo);
+    const now = getISOString();
+    this.account.ua = now;      // アカウントの更新日時を更新
+    this.table.thead.ua = now;  // テーブルの更新日時を更新
   }
 
   /**
-   * アカウントデータを削除する
-   * @param {string} tableId - テーブルID
-   * @param {number} serialNumber - 削除するアカウントのシリアルナンバー
-   * @returns {boolean} 成功した場合はtrue、失敗した場合はfalse
+   * アカウントの全データを取得する
+   * @returns {object}
    */
-  deleteAccount(tableId, serialNumber) {
-    const table = this._findTable(tableId);
-    if (!table) return false;
-
-    const accounts = table.tbody.accounts.account_data;
-    const index = accounts.findIndex(a => a.serial_number === serialNumber);
-
-    if (index === -1) return false;
-
-    accounts.splice(index, 1);
-
-    this.updateEmailsForAccount(tableId, serialNumber, []);
-    this.updatePasswordsForAccount(tableId, serialNumber, []);
-
-    table.thead.updated_at = new Date().toISOString();
-    this._updateTimestamps();
-    return true;
+  getData() {
+    return this.account;
   }
 
-  /**
-   * 特定のアカウントに関連するすべてのメールアドレスを更新する
-   * @param {string} tableId
-   * @param {number} serialNumber
-   * @param {Array<object>} emails
-   * @returns {boolean}
-   */
-  updateEmailsForAccount(tableId, serialNumber, emails) {
-      const table = this._findTable(tableId);
-      if (!table) return false;
-
-      if (!table.tbody.emails) table.tbody.emails = { email_data: [] };
-      if (!Array.isArray(table.tbody.emails.email_data)) table.tbody.emails.email_data = [];
-
-      const otherEmails = table.tbody.emails.email_data.filter(e => e.serial_number !== serialNumber);
-      
-      const updatedEmails = emails.map(e => {
-          const newEmail = { ...e, serial_number: serialNumber };
-          delete newEmail.user_id;
-          return newEmail;
-      });
-
-      table.tbody.emails.email_data = [...otherEmails, ...updatedEmails];
-      this._updateTimestamps();
-      return true;
-  }
-
-  /**
-   * 特定のアカウントに関連するすべてのパスワードを更新する
-   * @param {string} tableId
-   * @param {number} serialNumber
-   * @param {Array<object>} passwords
-   * @returns {boolean}
-   */
-  updatePasswordsForAccount(tableId, serialNumber, passwords) {
-      const table = this._findTable(tableId);
-      if (!table) return false;
-      
-      if (!table.tbody.passwords) table.tbody.passwords = { password_data: [] };
-      if (!Array.isArray(table.tbody.passwords.password_data)) table.tbody.passwords.password_data = [];
-
-      const otherPasswords = table.tbody.passwords.password_data.filter(p => p.serial_number !== serialNumber);
-
-      const now = new Date().toISOString();
-      const updatedPasswords = passwords.map(p => {
-        const newPassword = {
-          ...p,
-          serial_number: serialNumber,
-          created_at: p.created_at || now,
-          updated_at: now,
-        };
-        delete newPassword.user_id;
-        return newPassword;
-      });
-
-      table.tbody.passwords.password_data = [...otherPasswords, ...updatedPasswords];
-      this._updateTimestamps();
-      return true;
-  }
-
-
-  /**
-   * テーブルをIDで検索する
-   * @private
-   * @param {string} tableId - 検索するテーブルのID
-   * @returns {object|undefined} 見つかったテーブルオブジェクト
-   */
-  _findTable(tableId) {
-    if (!this.jsonData || !this.jsonData.root?.body?.tables?.table_data) return undefined;
-    return this.jsonData.root.body.tables.table_data.find(
-      t => t.thead.table_id === tableId
-    );
-  }
-
-  /**
-   * アカウントをシリアルナンバーで検索する
-   * @private
-   * @param {string} tableId - テーブルID
-   * @param {number} serialNumber - 検索するアカウントのシリアルナンバー
-   * @returns {object|undefined} 見つかったアカウントオブジェクト
-   */
-  _findAccount(tableId, serialNumber) {
-    const table = this._findTable(tableId);
-    if (!table || !table.tbody?.accounts?.account_data) return undefined;
-    return table.tbody.accounts.account_data.find(
-      a => a.serial_number === serialNumber
-    );
-  }
+  // 各プロパティのゲッター
+  get serialNumber() { return this.account.sn; }
+  get serviceName() { return this.account.nm; }
+  get initial() { return this.account.it; }
+  get category() { return this.account.ct; }
+  get summary() { return this.account.sm; }
+  get status() { return this.account.st; }
+  get createdAt() { return this.account.ca; }
+  get updatedAt() { return this.account.ua; }
+  // ... 必要に応じて他のプロパティのゲッターを追加
 }
 
-export default DataHandle;
+export {
+  DataHandle,
+  HeadData,
+  BodyData,
+  TableData,
+  AccountData,
+};

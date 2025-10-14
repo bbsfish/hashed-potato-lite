@@ -1,0 +1,144 @@
+<root>
+  <head>
+    <file_id>HLPS-5fb27fe1-49be-4519-8e47-b432233e5be4</file_id>
+    <file_version>1.0</file_version>
+    <file_title>Main File</file_title>
+    <file_description>This is main file</file_description>
+    <created_at>2025-10-09T05:08:47.005Z</created_at>
+    <updated_at>2025-10-10T01:58:18.922Z</updated_at>
+    <is_encrypted>false</is_encrypted>
+    <options>
+    	<column_alias>
+        <col>
+          <id>status</id>
+          <alias>ST</alias>
+        </col>
+      </column_alias>
+      <column_order>
+        <col>status</col>
+        <col>serial_number</col>
+        <col>service_name</col>
+        <col>email_count</col>
+        <col>password_count</col>
+        <col>user_id</col>
+        <col>website_url</col>
+        <col>note</col>
+        <col>category</col>
+        <col>service_name_initial</col>
+        <col>service_description</col>
+        <col>created_at</col>
+        <col>updated_at</col>
+      </column_order>
+      <invisible_columns>
+        <col>created_at</col>
+        <col>updated_at</col>
+      </invisible_columns>
+    </options>
+  </head>
+  <body>
+  	<sequence>
+  		<table>
+  			<id>TBL-5970</id>
+  			<sn>4</sn>
+  		<table>
+  	</sequence>
+    <tables>
+      <table>
+        <thead>
+          <nm>Main Table</nm>
+          <sm>This is main table</sm>
+          <id>TBL-5970</id>
+          <ca>2025-10-09T05:08:47.005Z</ca>
+          <ua>2025-10-10T01:58:18.922Z</ua>
+        </thead>
+        <tbody>
+          <ac>
+            <sn>1</sn>
+            <it>A</it>
+            <nm>Service A</nm>
+            <ct>Category X</ct>
+            <sm>This is summary</sm>
+            <st>0</st>
+            <ca>2025-10-09T05:12:40.745Z</ca>
+            <ua>2025-10-09T05:22:41.935Z</ua>
+
+            <ui>User ID</ui>
+            <em>
+              <nm>Main Mail Address</nm>
+              <em>hoge@mail.com</em>
+              <sm>This is main mail address</sm>
+            </em>
+            <pw>
+              <pw>abcdxyz123</pw>
+              <sm>Main Password</sm>
+              <ua>2025-10-09T05:22:41.936Z</ua>
+            </pw>
+            <nickname>Nickname</nickname>
+            <website>
+              <nm>Home Page</nm>
+              <url>https://piyopiyo.com</url>
+            </website>
+            <phone_number>000-0000-0000</phone_number>
+            <birthday>2000.01.01</birthday>
+            <address>
+              <postcode>000-0000</postcode>
+              <address>Tokyo, Koto-ku, XXX #111</address>
+            </address>
+            <legal_name>HOGEHOGE piyopiyo</legal_name>
+            <bank>
+              <nm>X Bank</nm>
+              <sm>This is X Bank</sm>
+              <financial_code>0000</financial_code>
+              <branch>
+                <nm>A Branch</nm>
+                <branch_code>000</branch_code>
+              </branch>
+              <account_number>1000000</account_number>
+            </bank>
+            <credit>
+              <nm>X Card</nm>
+              <st>0</st>
+              <brand>Visa</brand>
+              <number>0000-0000-0000-0000</number>
+              <sec_code>000</sec_code>
+              <expiration>01.20</expiration>
+              <related_numbers>
+                <nm>X Management Number<nm>
+                <text>XX-0000-0000</text>
+              <related_numbers>
+            </credit>
+            <memo>
+              <nm>Note</nm>
+              <text>Hello, everyone!</text>
+            </memo>
+            <code>
+              <nm>Backup Code</nm>
+              <st>0</st>
+              <text>0000-0000</text>
+            </code>
+            <number>123456</number>
+            <text>hello</text>
+            <link>
+              <table>TBL-5970<table>
+              <sn>1</sn>
+            </link>
+            <group>
+              <nm>Something Group</nm>
+              <note>
+                <nm>Note</nm>
+                <text>Hello, everyone!</text>
+              </note>
+              <code>
+                <nm></nm>
+                <st>0</st>
+                <text>0000-0000</text>
+              </code>
+              <number>123456</number>
+              <text>hello</text>
+            </group>
+          </ac>
+        </tbody>
+      </table>
+    </tables>
+  </body>
+</root>
