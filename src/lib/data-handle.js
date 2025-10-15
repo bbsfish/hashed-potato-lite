@@ -10,23 +10,25 @@ const alwaysArray = [
   'root.body.tables.table.tbody.ac',
 ];
 
-// XML パーサーとビルダーのオプション設定
-const parserOptions = {
-  ignoreAttributes: false,    // 属性値を有効化
-  attributeNamePrefix: '_',   // 属性のプレフィックスを設定
-  isArray: (_, tagPath) => {
-    return alwaysArray.includes(tagPath);
-  },
-};
-const builderOptions = {
-  ignoreAttributes: false,
-  attributeNamePrefix: '_',
-  format: true,               // 可読性の高いXMLを出力
-};
-const nonFormatBuilderOptions = {
-  ignoreAttributes: false,
-  attributeNamePrefix: '_',
-};
+// XML パーサーとビルダーのオプション設定およびインスタンス
+const fxp = {
+  parser: new XMLParser({
+    ignoreAttributes: false,    // 属性値を有効化
+    attributeNamePrefix: '_',   // 属性のプレフィックスを設定
+    isArray: (_, tagPath) => {
+      return alwaysArray.includes(tagPath);
+    },
+  }),
+  builder: new XMLBuilder({
+    ignoreAttributes: false,
+    attributeNamePrefix: '_',
+    format: true,               // 可読性の高いXMLを出力
+  }),
+  nonFormatBuilder: new XMLBuilder({
+    ignoreAttributes: false,
+    attributeNamePrefix: '_',
+  }),
+}
 
 // ヘルパー関数
 const getISOString = () => new Date().toISOString();
@@ -61,7 +63,6 @@ const arrayBufferToBase64 = (buffer) => {
   return window.btoa(binary);
 }
 
-
 /**
  * @class DataHandle
  * @description XMLデータのパース、ビルド、基本操作を行うベースクラス
@@ -72,10 +73,6 @@ class DataHandle {
    * @param {Uint8Array} saltBase64 - 復号に使用するソルト
    */
   constructor(parsedXmlData = null) {
-    this.parser = new XMLParser(parserOptions);
-    this.builder = new XMLBuilder(builderOptions);
-    this.nonFormatBuilder = new XMLBuilder(nonFormatBuilderOptions);
-
     // 新規作成時は、データを初期化して終了
     if (!parsedXmlData) {
       this.data = this._createInitialData();
@@ -85,6 +82,11 @@ class DataHandle {
     else {
       this.data = parsedXmlData;
     }
+  }
+
+  static isEncryptedXml(xmlString) {
+    const data = fxp.parser.parse(xmlString);
+    return (data?.root?.head?.is_encrypted) ? true : false;
   }
 
   /**
@@ -97,7 +99,7 @@ class DataHandle {
    */
   static async import(xmlString, password = null, ivBase64 = null, saltBase64 = null) {
     // 1. 初回のパース
-    const data = this.parser.parse(xmlString);
+    const data = fxp.parser.parse(xmlString);
 
     // 2-1. 暗号化がオフの場合はそのまま DataHandle インスタンスを返す
     if (!data.root.head.is_encrypted) return new DataHandle(data);
@@ -112,7 +114,7 @@ class DataHandle {
       const bodyXml = await this._decrypt(data.root.body.trim(), iv, salt, password, data.root.head.file_id);
 
       // 復号したXML (body部分) をパースして、元のデータにマージする
-      data.root.body = this.parser.parse(bodyXml);
+      data.root.body = fxp.parser.parse(bodyXml);
 
       return new DataHandle(data);
     } catch (error) {
@@ -131,12 +133,12 @@ class DataHandle {
 
     // 1-1. 暗号化がオフの場合はそのままビルドする
     if (!this.data.root.head.is_encrypted) {
-      return this.builder.build(this.data);
+      return fxp.builder.build(this.data);
     }
     // 1-2. 暗号化がオンでも、パスワードがなければエラーを起こす
     else if (!password) throw new Error('password is required.');
     // 1-3. 暗号化がオンで、パスワードがあれば、暗号化処理を実行
-    const targetXml = this.nonFormatBuilder.build(this.data.root.body);
+    const targetXml = fxp.nonFormatBuilder.build(this.data.root.body);
     const { iv, salt, cipher } = await this._encrypt(targetXml, password, this.data.root.head.file_id);
 
     // 2. 暗号化されたデータを含めて再度 XML をビルド
@@ -146,7 +148,7 @@ class DataHandle {
         body: cipher,
       },
     };
-    const exportXml = this.builder.build(exportData);
+    const exportXml = fxp.builder.build(exportData);
 
     // 3. XML、iv（Base64）、salt（Base64）を返す
     return {
@@ -273,14 +275,6 @@ class DataHandle {
         },
       },
     };
-  }
-
-  /**
-   * 現在のデータを XML 文字列としてビルドしてコンソールに表示する
-   */
-  testBuild() {
-    const xml = this.builder.build(this.data);
-    console.log(xml);
   }
 
   /**

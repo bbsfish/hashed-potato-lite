@@ -25,7 +25,7 @@ export default {
         // 1. ダイアログでファイル名を入力
         const title = await this.$dialog.prompt('新しいファイルの名前を入力してください', true);
         if (!title) {
-          this.$floatingmessage.message('ファイル作成がキャンセルされました');
+          this.$snackbar('ファイル作成がキャンセルされました');
           return;
         }
 
@@ -33,23 +33,26 @@ export default {
         const dataHandle = new DataHandle();
         const head = dataHandle.getHead();
         head.fileTitle = title;
-        const initialContent = dataHandle.export();
+        this.$store.commit('setModified', true);
+        const initialContent = await dataHandle.export();
         
         // 3. ファイルを保存
-        const handle = await fs.pickAndSaveFile(initialContent, {
+        const fileHandle = await fs.pickAndSaveFile(initialContent, {
           types: [{
             description: 'Hashed Potato Lite File',
             accept: { 'text/xml': ['.xml'] },
           }],
         }, `${title}.xml`);
+        this.$store.commit('setModified', false);
 
-        if (handle) {
-          this.$store.commit('setDataHandle', )
+        if (fileHandle) {
+          this.$store.commit('setDataHandle', dataHandle);
+          this.$store.commit('setFileHandle', fileHandle);
           // 4. IndexedDBにファイルハンドルを保存
-          await db.addFile(head.fileId, handle, handle.name);
-          this.$floatingmessage.message(`ファイル「${handle.name}」を作成しました`);
+          await db.addFile(head.fileId, fileHandle, fileHandle.name);
+          this.$snackbar(`ファイル「${fileHandle.name}」を作成しました`);
         } else {
-          this.$floatingmessage.message('ファイル作成がキャンセルされました');
+          this.$snackbar('ファイル作成がキャンセルされました');
         }
 
       } catch (error) {
