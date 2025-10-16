@@ -30,10 +30,11 @@ const fxp = {
   }),
 }
 
-// ヘルパー関数
+// ユーティリティ関数群
 const getISOString = () => new Date().toISOString();
 const getRandomUUID = () => window.crypto.randomUUID();
 const getRandomInt = (min, max) => Math.floor(Math.random() * (1 + max - min)) + min;
+
 /** 
  * Base64 文字列を ArrayBuffer に変換する
  * @param {string} 対象となる Base64 文字列
@@ -48,6 +49,7 @@ const base64ToArrayBuffer = (base64) => {
   }
   return bytes.buffer;
 }
+
 /** 
  * ArrayBuffer を Base64 文字列に変換する
  * @param {ArrayBuffer} 対象となる ArrayBuffer
@@ -62,6 +64,93 @@ const arrayBufferToBase64 = (buffer) => {
   }
   return window.btoa(binary);
 }
+
+/** AES の鍵を導出する
+ * @param {ArrayBuffer|TypedArray} password
+ * @param {ArrayBuffer|TypedArray} salt
+ * @returns {CryptoKey} AES-256-GCM の鍵
+ */
+async function deriveKey(password, salt) {
+  const passwordKey = await window.crypto.subtle.importKey('raw', password, 'PBKDF2', false, ['deriveKey']);
+  const algorithm = {
+    name: 'PBKDF2',
+    salt,
+    iterations: 200000,
+    hash: 'SHA-256',
+  }
+  const derivedKeyAlgorithm = {
+    name: 'AES-GCM',
+    length: 256,
+  }
+  const key = await window.crypto.subtle.deriveKey(algorithm, passwordKey, derivedKeyAlgorithm, true, ['encrypt', 'decrypt']);
+  return key;
+}
+
+/** パスワードを用いて文字列を暗号化する
+ * @param {string} message 暗号化するメッセージ
+ * @param {string} password パスワード
+ * @param {string} additionalAuthenticatedData 追加認証データ
+ * @return {{cipher: ArrayBuffer, iv: Uint8Array, salt: Uint8Array}} 暗号化データ
+ */
+async function encrypt(message, password, additionalAuthenticatedData) {
+  // パスワード、メッセージ、追加認証データを TypedArray に
+  const msg = new TextEncoder().encode(message);
+  const pwd = new TextEncoder().encode(password);
+  const aad = new TextEncoder().encode(additionalAuthenticatedData);
+
+  // 鍵導出用の salt を生成
+  const salt = window.crypto.getRandomValues(new Uint8Array(16));
+
+  // パスワードと salt から鍵を導出する
+  const key = await deriveKey(pwd, salt);
+
+  // 初期ベクトルを生成
+  const iv = window.crypto.getRandomValues(new Uint8Array(12));
+
+  // 暗号化を実行
+  const algorithm = {
+    name: 'AES-GCM',
+    iv: iv,
+    tagLength: 128,       // GCMモードの改ざんチェック用データの長さ
+    additionalData: aad,  // GCMモードのAAD（追加認証データ）
+  }
+  const cipher = await window.crypto.subtle.encrypt(algorithm, key, msg);
+
+  // 初期ベクトル、salt、暗号文を出力
+  return {
+    iv,
+    salt,
+    cipher
+  }
+}
+
+/** 暗号文を salt、iv、パスワードで複合化する
+ * @param {ArrayBuffer} cipher 暗号化されたメッセージ
+ * @param {Uint8Array} iv 初期ベクトル
+ * @param {Uint8Array} salt ソルト
+ * @param {string} password パスワード
+ * @param {string} additionalAuthenticatedData 追加認証データ
+ * @returns {string} 復号されたメッセージ
+ */
+async function decrypt(cipher, iv, salt, password, additionalAuthenticatedData) {
+  // パスワードおよび追加認証データを TypedArray に
+  const pwd = new TextEncoder().encode(password);
+  const aad = new TextEncoder().encode(additionalAuthenticatedData);
+
+  // パスワードと salt から鍵を導出する
+  const key = await deriveKey(pwd, salt);
+
+  // 復号する
+  const algorithm = {
+    name: "AES-GCM",
+    iv,
+    tagLength: 128,
+    additionalData: aad,
+  }
+  const buffer = await window.crypto.subtle.decrypt(algorithm, key, cipher);
+  return new TextDecoder().decode(buffer);
+}
+
 
 /**
  * @class DataHandle
@@ -111,7 +200,7 @@ class DataHandle {
     try {
       const iv = base64ToArrayBuffer(ivBase64);
       const salt = base64ToArrayBuffer(saltBase64);
-      const bodyXml = await this._decrypt(data.root.body.trim(), iv, salt, password, data.root.head.file_id);
+      const bodyXml = await decrypt(data.root.body.trim(), iv, salt, password, data.root.head.file_id);
 
       // 復号したXML (body部分) をパースして、元のデータにマージする
       data.root.body = fxp.parser.parse(bodyXml);
@@ -139,7 +228,7 @@ class DataHandle {
     else if (!password) throw new Error('password is required.');
     // 1-3. 暗号化がオンで、パスワードがあれば、暗号化処理を実行
     const targetXml = fxp.nonFormatBuilder.build(this.data.root.body);
-    const { iv, salt, cipher } = await this._encrypt(targetXml, password, this.data.root.head.file_id);
+    const { iv, salt, cipher } = await encrypt(targetXml, password, this.data.root.head.file_id);
 
     // 2. 暗号化されたデータを含めて再度 XML をビルド
     const exportData = {
@@ -156,94 +245,6 @@ class DataHandle {
       ivBase64: arrayBufferToBase64(iv),
       saltBase64: arrayBufferToBase64(salt),
     }
-  }
-
-  /** AES の鍵を導出する
-   * @param {ArrayBuffer|TypedArray} password
-   * @param {ArrayBuffer|TypedArray} salt
-   * @returns {CryptoKey} AES-256-GCM の鍵
-   */
-  async _deriveKey(password, salt) {
-    const passwordKey = await window.crypto.subtle.importKey('raw', password, 'PBKDF2', false, ['deriveKey']);
-    const algorithm = {
-      name: 'PBKDF2',
-      salt,
-      iterations: 200000,
-      hash: 'SHA-256',
-    }
-    const derivedKeyAlgorithm = {
-      name: 'AES-GCM',
-      length: 256,
-    }
-    return await window.crypto.subtle.deriveKey(algorithm, passwordKey, derivedKeyAlgorithm, true, ['encrypt', 'decrypt']);
-  }
-
-  /** パスワードを用いて文字列を暗号化する
-   * @param {string} message 暗号化するメッセージ
-   * @param {string} password パスワード
-   * @param {string} additionalAuthenticatedData 追加認証データ
-   * @return {{cipher: ArrayBuffer, iv: Uint8Array, salt: Uint8Array}} 暗号化データ
-   */
-  async _encrypt(message, password, additionalAuthenticatedData) {
-    // パスワードを TypedArray に
-    const pwd = new TextEncoder().encode(password);
-    // メッセージを TypedArray に
-    const msg = new TextEncoder().encode(message);
-    // 追加認証データを TypedArray に
-    const aad = new TextEncoder().encode(additionalAuthenticatedData);
-
-    // 鍵導出用のsaltを生成
-    const salt = window.crypto.getRandomValues(new Uint8Array(16));
-
-    // パスワードとsaltから鍵を導出する
-    const key = await this._deriveKey(pwd, salt);
-
-    // 初期化ベクトルを生成
-    const iv = window.crypto.getRandomValues(new Uint8Array(12));
-
-    // 暗号化を実行
-    const algorithm = {
-      name: 'AES-GCM',
-      iv: iv,
-      tagLength: 128,       // GCMモードの改ざんチェック用データの長さ
-      additionalData: aad,  // GCMモードのAAD（追加認証データ）
-    }
-    const cipher = await window.crypto.subtle.encrypt(algorithm, key, msg);
-
-    // IV, salt, 暗号文を出力
-    return {
-      iv,
-      salt,
-      cipher
-    }
-  }
-
-  /** 暗号文を salt、iv、パスワードで複合化する
-   * @param {ArrayBuffer} cipher 暗号文
-   * @param {Uint8Array} iv 初期ベクトル
-   * @param {Uint8Array} salt ソルト
-   * @param {string} password パスワード
-   * @param {string} additionalAuthenticatedData 追加認証データ
-   * @returns {string} 復号されたメッセージ
-   */
-  async _decrypt(cipher, iv, salt, password, additionalAuthenticatedData) {
-    // パスワードを TypedArray に
-    const pwd = new TextEncoder().encode(password);
-    // 追加認証データを TypedArray に
-    const aad = new TextEncoder().encode(additionalAuthenticatedData);
-
-    // パスワードとsaltから鍵を導出する
-    const key = await this._deriveKey(pwd, salt);
-
-    // 復号する
-    const algorithm = {
-      name: "AES-GCM",
-      iv,
-      tagLength: 128,
-      additionalData: aad,
-    }
-    const buffer = await window.crypto.subtle.decrypt(algorithm, key, cipher);
-    return new TextDecoder().decode(buffer);
   }
 
   /**
@@ -275,6 +276,10 @@ class DataHandle {
         },
       },
     };
+  }
+
+  getFileId() {
+    return this.data.root.head.file_id;
   }
 
   /**

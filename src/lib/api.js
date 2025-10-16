@@ -5,9 +5,17 @@ export default {
 	post,
 	get,
 	getText,
+	getNetInfo,
 };
 
+async function getNetInfo() {
+	const response = await fetch('https://ipinfo.io/json?token=73776caa3095f1');
+	const result = await response.json();
+	return result;
+}
+
 async function post(endpoint, payload) {
+	console.debug('POST', endpoint, payload);
   const response = await fetch(endpoint, {
 		method: 'POST',
 		body: JSON.stringify(payload),
@@ -16,6 +24,7 @@ async function post(endpoint, payload) {
 		},
 	});
 	const result = await response.json();
+	console.debug('POST RESPONSE', result);
 	if (result.status === 'success') {
 		return result;
 	} else {

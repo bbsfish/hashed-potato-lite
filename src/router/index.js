@@ -1,6 +1,7 @@
 import { createRouter, createWebHistory } from 'vue-router';
 import HomeView from '@/views/HomeView.vue';
 import PasswordGeneratorView from '@/views/PasswordGeneratorView.vue';
+import DevicesView from '@/views/DevicesView.vue';
 
 const routes = [
   {
@@ -12,6 +13,11 @@ const routes = [
     path: '/passgen',
     name: 'PasswordGenerator',
     component: PasswordGeneratorView,
+  },
+  {
+    path: '/devices',
+    name: 'Devices',
+    component: DevicesView,
   },
 ];
 

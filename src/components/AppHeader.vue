@@ -4,6 +4,7 @@
       <div class="logo"><router-link :to="{ name: 'Home' }">Hashed Potato Lite</router-link></div>
       <nav>
         <router-link :to="{ name: 'PasswordGenerator' }">パスワード生成</router-link>
+        <router-link :to="{ name: 'Devices' }">デバイス登録</router-link>
       </nav>
     </div>
     <div class="toggle-button" @click="toggleHeader" title="ヘッダーの表示切り替え">
