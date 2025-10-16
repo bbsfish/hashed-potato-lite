@@ -2,6 +2,7 @@ import { createRouter, createWebHistory } from 'vue-router';
 import HomeView from '@/views/HomeView.vue';
 import PasswordGeneratorView from '@/views/PasswordGeneratorView.vue';
 import DevicesView from '@/views/DevicesView.vue';
+import FileConfigView from '@/views/FileConfigView.vue';
 
 const routes = [
   {
@@ -19,6 +20,11 @@ const routes = [
     name: 'Devices',
     component: DevicesView,
   },
+  {
+    path: '/fileconfig',
+    name: 'FileConfig',
+    component: FileConfigView,
+  }
 ];
 
 const router = createRouter({

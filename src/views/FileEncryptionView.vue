@@ -1,9 +1,9 @@
 <template>
-  <div class="devices-view">
-    <h1>デバイス登録 (TOTP)</h1>
+  <div class="file-encryption-view">
+    <h1>ファイルの暗号化</h1>
     <section class="initial" v-if="step === 'initial'">
-      <p>新しいTOTPデバイスを登録します。</p>
-      <button class="register-button" @click="step = (dataHandle) ? 'confirmation' : 'prepare'">登録開始</button>
+      <p>ファイルを暗号化して保存します</p>
+      <button class="start-button" @click="step = (dataHandle) ? 'confirmation' : 'prepare'">暗号化開始</button>
     </section>
     <section class="prepare" v-if="step === 'prepare'">
       <SelectFileButton />
@@ -15,7 +15,7 @@
       <div v-if="dataHandle">
         <p><span>ファイル名</span><span>{{ fileHandle.name }}</span></p>
         <p><span>ファイルID</span><span>{{ head.fileId }}</span></p>
-        <p><span>ファイルラベル</span><span>{{ head.fileTitle }}</span></p>
+        <p><span>ファイルラベル</span><span>{{ head.fileName }}</span></p>
         <p><span>ファイル概要</span><span>{{ head.fileDescription }}</span></p>
         <p><span>最終更新日時</span><span>{{ new Date(head.updatedAt).toLocaleString() }}</span></p>
         <button class="register-button" @click="step = 'generating'">はい、登録を続行します</button>
@@ -47,7 +47,7 @@ import LoadingSpinner from '@/components/LoadingSpinner.vue';
 import QRCode from '@/components/QRCode.vue';
 
 export default {
-  name: 'DevicesView',
+  name: 'FileEncryptionView',
   components: {
     SelectFileButton,
     SelectRecentFileButton,

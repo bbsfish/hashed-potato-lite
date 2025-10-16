@@ -33,7 +33,13 @@
 ### エンドポイント
 `https://script.google.com/macros/s/AKfycbxJAaOwe97IjZ7jCUbB8LZJY7w91q_gqOb22ly7Z6lWaS7n7_4oKG3l_0S5ir7tI9qMaQ/exec`
 ### パラメータ
++ `file_id`*: ローカルファイルの UUID 文字列
++ `iv_base64`*: Base64 エンコードされた暗号化初期ベクトル
++ `salt_base64`*: Base64 エンコードされた暗号化ソルト
++ `isOverwrite`: すでに鍵がある場合に上書きするかどうか
 ### 戻り値
++ `status`: 処理結果。成功時には`success`が、失敗時には`error`が入る
++ `message`: 失敗時にのみ入る。エラーメッセージ文字列
 
 ## Send Mail
 ### エンドポイント

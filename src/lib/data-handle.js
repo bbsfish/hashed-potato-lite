@@ -233,7 +233,8 @@ class DataHandle {
    * @return {{ xml: string, ivBase64: string, saltBase64: string }} エクスポート情報
    */
   async export(password = null) {
-    // 0-1. 更新日時およびバージョン情報を更新する
+    console.debug('DataHandle.data[1]', this.data);
+    // 1-1. 更新日時およびバージョン情報を更新する
     this.data.root.head.updated_at = getISOString();
     this.data.root.head.file_version = (() => {
       const ver = String(this.data.root.head.file_version);
@@ -244,27 +245,30 @@ class DataHandle {
       const cuurentVer = Number(ver.split('.')[1]);
       return `${sysVer}.${cuurentVer + 1}`;
     })();
+    console.debug('DataHandle.data[2]', this.data);
 
-    // 1-1. 暗号化がオフの場合はそのままビルドする
+    // 2-1. 暗号化がオフの場合はそのままビルドする
     if (!this.data.root.head.is_encrypted) {
       return fxp.builder.build(this.data);
     }
-    // 1-2. 暗号化がオンでも、パスワードがなければエラーを起こす
+    // 2-2. 暗号化がオンでも、パスワードがなければエラーを起こす
     else if (!password) throw new Error('password is required.');
-    // 1-3. 暗号化がオンで、パスワードがあれば、暗号化処理を実行
+    // 2-3. 暗号化がオンで、パスワードがあれば、暗号化処理を実行
     const targetXml = fxp.nonFormatBuilder.build(this.data.root.body);
     const { iv, salt, cipher } = await encrypt(targetXml, password, this.data.root.head.file_id);
+    console.debug('DataHandle.data[3]', { targetXml, iv, salt, cipher });
 
-    // 2. 暗号化されたデータを含めて再度 XML をビルド
+    // 3. 暗号化されたデータを含めて再度 XML をビルド
     const exportData = {
       root: {
         head: this.data.root.head,
-        body: cipher,
+        body: arrayBufferToBase64(cipher),
       },
     };
     const exportXml = fxp.builder.build(exportData);
 
-    // 3. XML、iv（Base64）、salt（Base64）を返す
+    console.debug('DataHandle.data[4]', exportXml);
+    // 4. XML、iv（Base64）、salt（Base64）を返す
     return {
       xml: exportXml,
       ivBase64: arrayBufferToBase64(iv),
@@ -340,9 +344,9 @@ class HeadData extends DataHandle {
   get fileId() { return this.head.file_id; }
   get fileVersion() {
     const ver = String(this.data.root.head.file_version);
-    // バージョン形式が "X" の場合は小数部分に "0" を付与して "X.0" に変換
+    // バージョン形式が X の場合は小数部分に 0 を付与して X.0 に変換
     if (ver.match(/^\d+$/)) return `${ver}.0`;
-    // バージョン形式が "X.Y" の場合はそのまま返す
+    // バージョン形式が X.Y の場合はそのまま返す
     return ver;
   }
   set fileVersion(v) { this.head.file_version = (typeof v === 'string') ? v : String(v); }
@@ -352,35 +356,113 @@ class HeadData extends DataHandle {
   set fileTitle(v) { this.head.file_title = v; }
   get fileDescription() { return this.head.file_description; }
   set fileDescription(v) { this.head.file_description = v; }
-  get createdAt() { return this.head.created_at; }
-  get updatedAt() { return this.head.updated_at; }
+  get createdAt() { return new Date(this.head.created_at); }
+  get updatedAt() { return new Date(this.head.updated_at); }
   get isEncrypted() { return this.head.is_encrypted; }
   set isEncrypted(v) { this.head.is_encrypted = v; }
 
-  // options 関連の操作
-  getOptions() { return this.head.options; }
-  setColumnAlias(columnId, alias) {
+  /**
+   * OptionsData のインスタンスを取得する
+   * @returns {OptionsData}
+   */
+  getOptions() {
+    return new OptionsData(this.data);
+  }
+}
+
+/**
+ * @class OptionsData
+ * @description XML の head.options 部分を操作するクラス
+ * @extends HeadData
+ */
+class OptionsData extends HeadData {
+  constructor(data) {
+    super();
+    this.data = data;
+    this.options = this.data.root.head.options;
+  }
+
+  get columnAlias() {
+    // column_alias が設定されてない場合は空配列を返す
+    if (this.options.column_alias === '') return [];
+    // column_alias が設定されている場合、既定の形式にフォーマットして返す
+    if (this.options.column_alias.col) {
+      return this.options.column_alias.col.map((c) => ({ id: c._id, alias: c['#text'] }));
+    };
+    // それ以外は空配列を返す
+    return [];
+  }
+  get columnOrder() {
+    // column_order が設定されてない場合は空配列を返す
+    if (this.options.column_order === '') return [];
+    // column_order が設定されている場合はそのまま返す。それ以外は空配列を返す
+    return this.options.column_order.col || [];
+  }
+  get invisibleColumns() {
+    // invisible_columns が設定されてない場合は空配列を返す
+    if (this.options.invisible_columns === '') return [];
+    // invisible_columns が設定されている場合はそのまま返す。それ以外は空配列を返す
+    return this.options.invisible_columns.col || [];
+  }
+
+  /**
+   * エイリアス名を設定する
+   * @param {{id: string, alias: string}} data 設定するカラム ID とエイリアス 
+   */
+  setColumnAlias({ id, aliasText }) {
     // 設定が存在するかチェック
-    const index = this.head.options.column_alias.col.findIndex((c) => c._id === columnId);
+    const index = this.columnAlias.findIndex((c) => c.id === id);
     // 存在しない場合は追加して、存在する場合は上書き
-    if (index === -1) this.head.options.column_alias.col.push({ _id: columnId, '#text': alias });
-    else this.head.options.column_alias.col[index]['#text'] = alias;
+    if (index === -1) this.head.options.column_alias.col.push({ _id: id, '#text': aliasText });
+    else this.head.options.column_alias.col[index]['#text'] = aliasText;
   }
-  removeColumnAlias(columnId) {
-    this.head.options.column_alias.col = this.head.options.column_alias.col.filter((c) => c._id !== columnId);
+
+  /**
+   * エイリアス名を削除する
+   * @param {string} id 削除するカラム ID 
+   */
+  removeColumnAlias(id) {
+    this.head.options.column_alias.col = this.columnAlias.filter((c) => c.id !== id);
   }
+
+  /**
+   * エイリアス名を全て削除する
+   */
   clearColumnAlias() { this.head.options.column_alias.col = []; }
+
+  /**
+   * カラムの順番を設定する
+   * @param {string[]} order カラム ID の配列
+   */
   setColumnOrder(order) { this.head.options.column_order.col = order; }
+
+  /**
+   * カラムの順番設定をすべて削除する
+   */
   clearColumnOrder() { this.head.options.column_order.col = []; }
-  setInvisibleColumn(columnId) {
+
+  /**
+   * 非表示カラムを設定する
+   * @param {string} id 非表示にするカラム ID
+   */
+  setInvisibleColumn(id) {
     // 設定が存在するかチェック
-    const index = this.head.options.invisible_columns.col.findIndex((c) => c._id === columnId);
+    const index = this.invisibleColumns.findIndex((c) => c === id);
     // 存在しない場合のみ追加
-    if (index === -1) this.head.options.invisible_columns.col.push(columnId);
+    if (index === -1) this.head.options.invisible_columns.col.push(id);
   }
-  removeInvisibleColumn(columnId) {
-    this.head.options.invisible_columns.col = this.head.options.invisible_columns.col.filter((c) => c._id !== columnId);
+
+  /**
+   * カラムの非表示設定を削除する
+   * @param {string} id 再表示にするカラム ID
+   */
+  removeInvisibleColumn(id) {
+    this.head.options.invisible_columns.col = this.invisibleColumns.filter((c) => c !== id);
   }
+
+  /**
+   * 非表示カラムの設定をすべて削除する
+   */
   clearInvisibleColumns() { this.head.options.invisible_columns.col = []; }
 }
 
