@@ -10,7 +10,6 @@ import FileSystem from '@/lib/file-system';
 import { DataHandle } from '@/lib/data-handle';
 import Database from '@/lib/database';
 import IconPaperClip from '@/components/icons/IconPaperClip.vue';
-
 const fs = new FileSystem();
 const db = new Database();
 

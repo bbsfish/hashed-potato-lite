@@ -1,5 +1,5 @@
 <template>
-  <div class="file-config-view" v-if="head">
+  <div class="file-config-view" v-if="fileHandle && dataHandle">
     <h1>ファイル設定</h1>
     <div class="settings-container">
       <div class="setting-item">
@@ -14,12 +14,12 @@
       </div>
       <div class="setting-item">
         <label>作成日時</label>
-        <p class="value">{{ new Date(head.createdAt).toLocaleString() }}</p>
+        <p class="value">{{ head.createdAt.toLocaleString() }}</p>
         <small>ファイルが作成された日時です。変更はできません。</small>
       </div>
       <div class="setting-item">
         <label>更新日時</label>
-        <p class="value">{{ new Date(head.updatedAt).toLocaleString() }}</p>
+        <p class="value">{{ head.updatedAt.toLocaleString() }}</p>
         <small>ファイルが最後に更新された日時です。変更はできません。</small>
       </div>
 
@@ -59,9 +59,8 @@
 </template>
 
 <script>
-import { mapGetters } from 'vuex';
+import { mapGetters, mapMutations } from 'vuex';
 import FileSystem from '@/lib/file-system';
-
 const fs = new FileSystem();
 
 export default {
@@ -69,7 +68,11 @@ export default {
   data() {
     return {
       isEditing: false,
-      editableSettings: {},
+      editableSettings: {
+        fileTitle: '',
+        fileDescription: '',
+        isEncrypted: false,
+      },
     };
   },
   computed: {
@@ -79,56 +82,45 @@ export default {
     },
   },
   methods: {
+    ...mapMutations(['setModified']),
     loadSettings() {
-      if (this.head) {
-        this.editableSettings = {
-          fileTitle: this.head.fileTitle,
-          fileDescription: this.head.fileDescription,
-          isEncrypted: this.head.isEncrypted,
-          // TODO: カラム設定も同様に読み込む
-        };
-      }
+      if (!this.dataHandle) return;
+      this.editableSettings = {
+        fileTitle: this.head.fileTitle,
+        fileDescription: this.head.fileDescription,
+        isEncrypted: this.head.isEncrypted,
+      };
     },
     async saveSettings() {
-      if (!this.dataHandle || !this.fileHandle) {
-        this.$dialog.alert('ファイルハンドルが見つかりません。');
-        return;
-      }
-
-      // isEncryptedがFalseからTrueに変更された場合
-      if (this.editableSettings.isEncrypted && !this.head.isEncrypted) {
-        const confirmed = await this.$dialog.confirm('ファイルを暗号化します。この操作は元に戻せません。よろしいですか？');
-        if (!confirmed) return;
-      }
-
+      const { fileTitle, fileDescription, isEncrypted } = this.editableSettings;
       try {
-        // 1. DataHandleに変更を適用
-        const head = this.dataHandle.getHead();
-        head.fileTitle = this.editableSettings.fileTitle;
-        head.fileDescription = this.editableSettings.fileDescription;
-        head.isEncrypted = this.editableSettings.isEncrypted;
-        this.$store.commit('setModified', true);
+        // DataHandle に変更を適用
+        this.head.fileTitle = fileTitle.trim();
+        this.head.fileDescription = fileDescription.trim();
+        this.head.isEncrypted = isEncrypted;
+        this.setModified(true);
 
-        // 2. ファイルに書き出すXMLコンテンツを生成
-        const password = this.editableSettings.isEncrypted ? await this.$dialog.prompt('暗号化パスワードを入力してください') : null;
-        if (this.editableSettings.isEncrypted && !password) {
-          this.$snackbar('パスワードが入力されなかったため、保存をキャンセルしました。');
+        // 暗号化が有効になった場合、確認ダイアログを表示したのち、ファイル暗号化ページへ遷移
+        if (isEncrypted && (await this.$dialog.confirm('ファイルを暗号化します。この操作は元に戻せません。よろしいですか？'))) {
+          this.$router.push({ name: 'FileEncryption'});
           return;
         }
 
-        const exportedData = await this.dataHandle.export(password);
-        const contentToSave = (typeof exportedData === 'string') ? exportedData : exportedData.xml;
+        // ユーザーがキャンセルした場合、isEncrypted を元に戻す
+        this.editableSettings.isEncrypted = false;
 
+        // ファイルに書き出す XML コンテンツを生成
+        const { xml } = await this.dataHandle.export();
 
-        // 3. ファイルシステムAPIでファイルに上書き保存
-        const success = await fs.saveFile(this.fileHandle, contentToSave);
+        // ファイルに上書き保存
+        const success = await fs.saveFile(this.fileHandle, xml);
 
         if (success) {
-          this.$store.commit('setModified', false);
-          this.$snackbar('設定を保存しました。');
+          this.setModified(false);
+          this.$snackbar('設定を保存しました');
           this.isEditing = false;
         } else {
-          this.$dialog.alert('設定の保存に失敗しました。');
+          this.$dialog.alert('設定の保存に失敗しました');
         }
       } catch (error) {
         console.error('Error saving settings:', error);
@@ -140,13 +132,8 @@ export default {
       this.isEditing = false;
     },
   },
-  watch: {
-    dataHandle: {
-      immediate: true,
-      handler() {
-        this.loadSettings();
-      },
-    },
+  mounted() {
+    this.loadSettings();
   },
 };
 </script>

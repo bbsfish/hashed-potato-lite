@@ -75,7 +75,7 @@ export default {
         const userNetInfo = await api.getNetInfo(); // ユーザのネットワーク情報を取得
         const fileId = this.head.fileId;
         const params = {
-          user_id: fileId,
+          file_id: fileId,
           ip_address: userNetInfo.ip,
           region: userNetInfo.timezone,
         }

@@ -3,6 +3,7 @@ import HomeView from '@/views/HomeView.vue';
 import PasswordGeneratorView from '@/views/PasswordGeneratorView.vue';
 import DevicesView from '@/views/DevicesView.vue';
 import FileConfigView from '@/views/FileConfigView.vue';
+import FileEncryptionView from '@/views/FileEncryptionView.vue';
 
 const routes = [
   {
@@ -21,9 +22,14 @@ const routes = [
     component: DevicesView,
   },
   {
-    path: '/fileconfig',
+    path: '/file-config',
     name: 'FileConfig',
     component: FileConfigView,
+  },
+  {
+    path: '/file-encryption',
+    name: 'FileEncryption',
+    component: FileEncryptionView,
   }
 ];
 

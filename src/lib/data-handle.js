@@ -87,6 +87,7 @@ const arrayBufferToBase64 = (buffer) => {
  * @returns {CryptoKey} AES-256-GCM の鍵
  */
 async function deriveKey(password, salt) {
+  console.debug('deriveKey', { password, salt });
   const passwordKey = await window.crypto.subtle.importKey('raw', password, 'PBKDF2', false, ['deriveKey']);
   const algorithm = {
     name: 'PBKDF2',
@@ -109,6 +110,7 @@ async function deriveKey(password, salt) {
  * @return {{cipher: ArrayBuffer, iv: Uint8Array, salt: Uint8Array}} 暗号化データ
  */
 async function encrypt(message, password, additionalAuthenticatedData) {
+  console.debug('encrypt', { message, password, additionalAuthenticatedData });
   // パスワード、メッセージ、追加認証データを TypedArray に
   const msg = new TextEncoder().encode(message);
   const pwd = new TextEncoder().encode(password);
@@ -149,6 +151,7 @@ async function encrypt(message, password, additionalAuthenticatedData) {
  * @returns {string} 復号されたメッセージ
  */
 async function decrypt(cipher, iv, salt, password, additionalAuthenticatedData) {
+  console.debug('decrypt', { cipher, iv, salt, password, additionalAuthenticatedData });
   // パスワードおよび追加認証データを TypedArray に
   const pwd = new TextEncoder().encode(password);
   const aad = new TextEncoder().encode(additionalAuthenticatedData);
@@ -163,7 +166,8 @@ async function decrypt(cipher, iv, salt, password, additionalAuthenticatedData) 
     tagLength: 128,
     additionalData: aad,
   }
-  const buffer = await window.crypto.subtle.decrypt(algorithm, key, cipher);
+  console.debug('decrypt', { algorithm, key, cipher });
+  const buffer = await window.crypto.subtle.decrypt(algorithm, key, base64ToArrayBuffer(cipher));
   return new TextDecoder().decode(buffer);
 }
 
@@ -222,8 +226,9 @@ class DataHandle {
       data.root.body = fxp.parser.parse(bodyXml);
 
       return new DataHandle(data);
-    } catch (error) {
-      throw new Error('Failed to decrypt data.');
+    } catch (err) {
+      console.error(err);
+      throw new Error('データの復号に失敗しました。パスワードが正しいか確認してください');
     }
   }
 
@@ -233,7 +238,9 @@ class DataHandle {
    * @return {{ xml: string, ivBase64: string, saltBase64: string }} エクスポート情報
    */
   async export(password = null) {
-    console.debug('DataHandle.data[1]', this.data);
+    // 暗号化が有効の場合、ヘッダ情報を更新する
+    if (password) this.data.root.head.is_encrypted = true;
+    
     // 1-1. 更新日時およびバージョン情報を更新する
     this.data.root.head.updated_at = getISOString();
     this.data.root.head.file_version = (() => {
@@ -245,18 +252,20 @@ class DataHandle {
       const cuurentVer = Number(ver.split('.')[1]);
       return `${sysVer}.${cuurentVer + 1}`;
     })();
-    console.debug('DataHandle.data[2]', this.data);
 
-    // 2-1. 暗号化がオフの場合はそのままビルドする
-    if (!this.data.root.head.is_encrypted) {
-      return fxp.builder.build(this.data);
+    // 2-1. 暗号化がオフの場合はそのままビルドして終了
+    if (!this.data.root.head.is_encrypted) return {
+      xml: fxp.builder.build(this.data),
+      ivBase64: null,
+      saltBase64: null,
     }
+
     // 2-2. 暗号化がオンでも、パスワードがなければエラーを起こす
     else if (!password) throw new Error('password is required.');
+
     // 2-3. 暗号化がオンで、パスワードがあれば、暗号化処理を実行
     const targetXml = fxp.nonFormatBuilder.build(this.data.root.body);
     const { iv, salt, cipher } = await encrypt(targetXml, password, this.data.root.head.file_id);
-    console.debug('DataHandle.data[3]', { targetXml, iv, salt, cipher });
 
     // 3. 暗号化されたデータを含めて再度 XML をビルド
     const exportData = {

@@ -3,36 +3,49 @@
     <h1>ファイルの暗号化</h1>
     <section class="initial" v-if="step === 'initial'">
       <p>ファイルを暗号化して保存します</p>
-      <button class="start-button" @click="step = (dataHandle) ? 'confirmation' : 'prepare'">暗号化開始</button>
-    </section>
-    <section class="prepare" v-if="step === 'prepare'">
-      <SelectFileButton />
-      <SelectRecentFileButton />
-      <CreateFileButton />
+      <button class="confirmation-button" @click="step = 'confirmation'">暗号化開始</button>
     </section>
     <section class="confirmation" v-if="step === 'confirmation'">
-      <p>以下のファイルが選択されました。よろしいですか?</p>
+      <p>以下のファイルが暗号化されます。よろしいですか?</p>
       <div v-if="dataHandle">
         <p><span>ファイル名</span><span>{{ fileHandle.name }}</span></p>
         <p><span>ファイルID</span><span>{{ head.fileId }}</span></p>
         <p><span>ファイルラベル</span><span>{{ head.fileName }}</span></p>
         <p><span>ファイル概要</span><span>{{ head.fileDescription }}</span></p>
         <p><span>最終更新日時</span><span>{{ new Date(head.updatedAt).toLocaleString() }}</span></p>
-        <button class="register-button" @click="step = 'generating'">はい、登録を続行します</button>
+        <button class="confirmation-button" @click="step = 'client-password'">はい、暗号化を続行します</button>
       </div>
     </section>
-    <section class="generating" v-if="step == 'generating'">
-      <LoadingSpinner m="QRコードを生成しています..." />
+    <section class="client-password" v-if="step === 'client-password'">
+      <p>マスターパスワードを設定します。これはファイルを開くために必要です。忘れた場合、もとには戻せません。慎重に設定してください</p>
+      <label>
+        <span>マスターパスワード</span>
+        <input type="password" class="mp-input" placeholder="マスターパスワードを入力" v-model="vmClientPassword" />
+      </label>
+      <label>
+        <span>マスターパスワード（確認用）</span>
+        <input type="password" class="mp-input" placeholder="もう一度マスターパスワードを入力" v-model="vmClientPasswordConfirm" />
+      </label>
+      <button class="confirmation-button" @click="checkClientPassword">このマスターパスワードで続行します</button>
     </section>
-    <section class="scan" v-if="step === 'scan'">
-      <h2>QRコードをスキャン</h2>
-      <p>お使いの認証アプリで以下のQRコードをスキャンしてください。</p>
-      <QRCode :text="qrCodeDataUrl" />
-      <div class="verification">
-        <p>スキャンが完了したら、表示されている6桁のコードを入力して登録を完了してください。</p>
-        <input type="text" v-model="verificationCode" placeholder="6桁のコード" maxlength="6" class="verification-input" />
-        <button @click="verifyCode" class="verify-button">確認</button>
-      </div>
+    <section class="onetime-password" v-if="step === 'onetime-password'">
+      <p>お使いのデバイスに表示されているワンタイムパスワードを入力してください</p>
+      <p>お使いのデバイスを登録していない場合は、まず<router-link :to="{ name: 'Devices' }">このページ</router-link>から登録してください</p>
+      <label>
+        <span>ワンタイムパスワード</span>
+        <input type="text" placeholder="6桁のコード" maxlength="6" class="otp-input" v-model="vmVerificationCode" />
+      </label>
+      <button class="confirmation-button" @click="checkOnetimePassword">確認</button>
+    </section>
+    <section class="verifying" v-if="step == 'verifying'">
+      <LoadingSpinner m="ワンタイムパスワードを検証しています..." />
+    </section>
+    <section class="encrypting" v-if="step == 'encrypting'">
+      <LoadingSpinner m="ファイルを暗号化しています..." />
+    </section>
+    <section class="success" v-if="step == 'success'">
+      <p>ファイルの暗号化が完了しました</p>
+      <button class="confirmation-button" @click="$router.push({ name: 'Home' })">ホームに戻る</button>
     </section>
   </div>
 </template>
@@ -40,11 +53,13 @@
 <script>
 import { mapGetters } from 'vuex';
 import api from '@/lib/api';
+import FileSystem from '@/lib/file-system';
 import SelectFileButton from '@/components/SelectFileButton.vue';
 import SelectRecentFileButton from '@/components/SelectRecentFileButton.vue';
 import CreateFileButton from '@/components/CreateFileButton.vue';
 import LoadingSpinner from '@/components/LoadingSpinner.vue';
 import QRCode from '@/components/QRCode.vue';
+const fs = new FileSystem();
 
 export default {
   name: 'FileEncryptionView',
@@ -58,9 +73,10 @@ export default {
   data() {
     return {
       step: 'initial',  // 'initial', 'prepare', 'generating', 'scan'
-      qrCodeDataUrl: null,
-      secret: null, // サーバーから受け取ったシークレットを保持
-      verificationCode: '',
+      serverPassword: null,
+      vmClientPassword: '',
+      vmClientPasswordConfirm: '',
+      vmVerificationCode: '',
     };
   },
   computed: {
@@ -70,36 +86,86 @@ export default {
     }
   },
   methods: {
-    async generateQrCode() {
-      try {
-        const userNetInfo = await api.getNetInfo(); // ユーザのネットワーク情報を取得
-        const fileId = this.head.fileId;
-        const params = {
-          user_id: fileId,
-          ip_address: userNetInfo.ip,
-          region: userNetInfo.timezone,
-        }
-        const result = await api.post(api.TOTP_REGISTRATION, params);
-        this.qrCodeDataUrl = result.otpauth_url;
-        this.step = 'scan';
-      } catch (error) {
-        this.$dialog.alert('QRコードの生成に失敗しました');
-        this.step = 'initial';
+    checkClientPassword() {
+      const cp = this.vmClientPassword.trim();
+      const cpc = this.vmClientPasswordConfirm.trim();
+      if (cp === '' || cpc === '') {
+        this.$dialog.alert('マスターパスワードおよび確認用パスワードを両方入力してください');
+        return;
       }
+      if (cp !== cpc) {
+        this.$dialog.alert('マスターパスワードと確認用パスワードが一致しません');
+        this.vmClientPassword = '';
+        this.vmClientPasswordConfirm = '';
+        return;
+      }
+      if (cp.length < 4) {
+        this.$dialog.alert('マスターパスワードは4文字以上で設定してください');
+        this.vmClientPassword = '';
+        this.vmClientPasswordConfirm = '';
+        return;
+      }
+      this.step = 'onetime-password';
+    },
+    checkOnetimePassword() {
+      const code = this.vmVerificationCode.trim();
+      if (code.length !== 6 || !/^\d{6}$/.test(code)) {
+        this.$dialog.alert('有効な6桁のコードを入力してください');
+        return;
+      }
+      this.step = 'verifying';
     },
     async verifyCode() {
-        if (this.verificationCode.length !== 6 || !/^\d{6}$/.test(this.verificationCode)) {
-            this.$dialog.alert('有効な6桁のコードを入力してください。');
-            return;
+      const token = this.vmVerificationCode.trim();
+      const userNetInfo = await api.getNetInfo(); // ユーザのネットワーク情報を取得
+      const result = await api.post(api.TOTP_VERIFICATION, {
+        file_id: this.head.fileId,
+        mode: 'encrypt',
+        token,
+        ip_address: userNetInfo.ip,
+        region: userNetInfo.timezone,
+      });
+      if (result.status === 'error') {
+        this.$dialog.alert(`ワンタイムパスワードの検証に失敗しました: ${result.message}`);
+        this.step = 'onetime-password';
+        this.vmVerificationCode = '';
+        return;
+      }
+      this.serverPassword = result.server_password;
+      this.step = 'encrypting';
+      this.vmVerificationCode = '';
+    },
+    async encryptFile() {
+      const password = this.vmClientPassword.trim() + this.serverPassword;
+      try {
+        // ファイルデータを暗号化
+        const result = await this.dataHandle.export(password);
+
+        // サーバーに暗号情報を登録
+        let srvResult = null;
+        do {
+          srvResult = await api.post(api.KEYS_REGISTRATION, {
+            file_id: this.head.fileId,
+            iv_base64: result.ivBase64,
+            salt_base64: result.saltBase64,
+          });
+        } while (srvResult.status !== 'success');
+
+        // 完了したら書き込み
+        const fsResult = fs.saveFile(this.fileHandle, result.xml);
+        if (!fsResult) {
+          this.$dialog.alert('ファイルの保存に失敗しました');
+          this.step = 'initial';
+          return;
         }
-        // TODO: 本来はここでサーバーに確認コードを送信して検証する
-        // 今回はフロントエンドのみの実装のため、成功したと仮定する
-        console.log('Verification code:', this.verificationCode);
-        console.log('Secret:', this.secret);
-        await this.$dialog.alert('デバイスの登録が完了しました。');
-        this.qrCodeDataUrl = null;
-        this.verificationCode = '';
-        this.secret = null;
+        this.step = 'success';
+      } catch (error) {
+        this.$dialog.alert(`ファイルの暗号化に失敗しました: ${error.message}`);
+        this.step = 'initial';
+      } finally {
+        this.vmClientPassword = '';
+        this.vmClientPasswordConfirm = '';
+      }
     }
   },
   watch: {
@@ -107,9 +173,11 @@ export default {
       this.step = 'confirmation';
     },
     step(to) {
-      if (to === 'generating') {
-        this.qrCodeDataUrl = null;
-        this.generateQrCode();
+      if (to === 'verifying') {
+        this.verifyCode();
+      }
+      if (to === 'encrypting') {
+        this.encryptFile();
       }
     },
   },
@@ -119,7 +187,7 @@ export default {
 <style lang="scss" scoped>
 @use '@/styles/variables' as var;
 
-.devices-view {
+.file-encryption-view {
   max-width: 600px;
   margin: 2rem auto;
   padding: 2rem;
@@ -129,7 +197,7 @@ export default {
   text-align: center;
 }
 
-.register-button, .verify-button {
+.confirmation-button {
   padding: 0.75rem 1.5rem;
   font-size: 1rem;
   font-weight: bold;
@@ -154,19 +222,24 @@ export default {
     box-shadow: 0 2px 8px rgba(0,0,0,0.1);
   }
 }
-
-.verification-section {
-    margin-top: 2rem;
-    .verification-input {
-        display: block;
-        width: 50%;
-        margin: 1rem auto;
-        padding: 0.75rem;
-        font-size: 1.2rem;
-        text-align: center;
-        letter-spacing: 0.5em;
-        border: 1px solid #ccc;
-        border-radius: 4px;
-    }
+.mp-input {
+  display: block;
+  width: 100%;
+  margin: 0.5rem 0 1rem 0;
+  padding: 0.75rem;
+  font-size: 1.2rem;
+  border: 1px solid #ccc;
+  border-radius: 4px;
+}
+.otp-input {
+  display: block;
+  width: 50%;
+  margin: 1rem auto;
+  padding: 0.75rem;
+  font-size: 1.2rem;
+  text-align: center;
+  letter-spacing: 0.5em;
+  border: 1px solid #ccc;
+  border-radius: 4px;
 }
 </style>

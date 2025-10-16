@@ -14,10 +14,15 @@ const DialogComponent = {
       type: String,
       required: true,
     },
-    // 戻り値のnull強制
+    // prompt モードでの戻り値の null 強制
     forceNull: {
       type: Boolean,
       default: false,
+    },
+    // prompt モードでの input タイプ
+    inputType: {
+      type: String,
+      default: 'text',
     },
     // ダイアログを閉じる際のコールバック
     onClose: {
@@ -45,7 +50,7 @@ const DialogComponent = {
       children.push(
         h('input', {
           class: 'dialog-input',
-          type: 'text',
+          type: this.inputType,
           value: this.inputValue,
           onInput: (event) => (this.inputValue = event.target.value),
           // ref属性はrender関数内ではこのように扱う
@@ -122,7 +127,7 @@ const DialogComponent = {
 };
 
 // --- ダイアログを生成するヘルパー関数 ---
-function createDialog(mode, { message, forceNull }) {
+function createDialog(mode, { message, forceNull, inputType }) {
   return new Promise(resolve => {
     const container = document.createElement('div');
     document.body.appendChild(container);
@@ -139,6 +144,7 @@ function createDialog(mode, { message, forceNull }) {
           mode,
           message,
           forceNull,
+          inputType,
           onClose: cleanup,
         });
       },
@@ -176,8 +182,8 @@ const DialogPlugin = {
        * @param {string} forceNull - 入力値が空の場合、OKを押してもnullを返します
        * @returns {Promise<string|null>} OKで入力文字列, キャンセルでnullを返します
        */
-      prompt(message, forceNull = false) {
-        return createDialog('prompt', { message, forceNull });
+      prompt(message, { forceNull = false, inputType = 'text' }) {
+        return createDialog('prompt', { message, forceNull, inputType });
       },
     };
 

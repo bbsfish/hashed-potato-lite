@@ -15,7 +15,8 @@ async function getNetInfo() {
 }
 
 async function post(endpoint, payload) {
-	console.debug('POST', endpoint, payload);
+	console.debug('POST', { target: new URL(endpoint), payload });
+	
   const response = await fetch(endpoint, {
 		method: 'POST',
 		body: JSON.stringify(payload),
@@ -25,11 +26,12 @@ async function post(endpoint, payload) {
 	});
 	const result = await response.json();
 	console.debug('POST RESPONSE', result);
-	if (result.status === 'success') {
-		return result;
-	} else {
-		throw new Error(result.message || 'Unknown error occurred.');
-	}
+	return result;
+	// if (result.status === 'success') {
+	// 	return result;
+	// } else {
+	// 	throw new Error(result.message || 'Unknown error occurred.');
+	// }
 }
 
 async function get(endpoint) {
