@@ -198,6 +198,16 @@ class DataHandle {
     return (data?.root?.head?.is_encrypted) ? true : false;
   }
 
+  static isPlainXml(xmlString) {
+    const data = fxp.parser.parse(xmlString);
+    return (data?.root?.head?.is_encrypted) ? false : true;
+  }
+
+  static getFileIdFromXml(xmlString) {
+    const data = fxp.parser.parse(xmlString);
+    return data?.root?.head?.file_id || null;
+  }
+
   /**
    * XML データをインポートして、パースする
    * @param {string} xmlString XML データ
@@ -214,7 +224,7 @@ class DataHandle {
     if (!data.root.head.is_encrypted) return new DataHandle(data);
 
     // 2-2. 暗号化がオンでも、必要な情報が足りなかったらエラーを起こす
-    else if (!password || !ivBase64 || !saltBase64) throw new Error('password, ivBase64 and saltBase64 are required.');
+    else if (!password || !ivBase64 || !saltBase64) throw new Error('password, ivBase64 and saltBase64 are required');
 
     // 2-3. 暗号化がオンで、復号に必要な情報がすべて提供されている場合に復号処理を実行
     try {
@@ -244,13 +254,10 @@ class DataHandle {
     // 1-1. 更新日時およびバージョン情報を更新する
     this.data.root.head.updated_at = getISOString();
     this.data.root.head.file_version = (() => {
-      const ver = String(this.data.root.head.file_version);
-      // バージョン形式が X の場合は小数部分に 1 を付与して X.1 に変換
-      if (ver.match(/^\d+$/)) return `${ver}.1`;
-      // バージョン形式が X.Y の場合は Y に 1 を足す
+      const ver = this.data.root.head.file_version;
       const sysVer = ver.split('.')[0];
-      const cuurentVer = Number(ver.split('.')[1]);
-      return `${sysVer}.${cuurentVer + 1}`;
+      const localVer = Number(ver.split('.')[1]);
+      return `v${sysVer}.${localVer + 1}`;
     })();
 
     // 2-1. 暗号化がオフの場合はそのままビルドして終了
@@ -296,7 +303,7 @@ class DataHandle {
       root: {
         head: {
           file_id: `HPL-${getRandomUUID()}`,
-          file_version: '1.0',
+          file_version: 'v1.0',
           file_title: '',
           file_description: '',
           created_at: now,
@@ -358,8 +365,8 @@ class HeadData extends DataHandle {
     // バージョン形式が X.Y の場合はそのまま返す
     return ver;
   }
-  set fileVersion(v) { this.head.file_version = (typeof v === 'string') ? v : String(v); }
-  get fileSystemVersion() { return Number(this.fileVersion.split('.')[0]); }
+  set fileVersion(v) { this.head.file_version = v; }
+  get fileSystemVersion() { return Number(this.fileVersion.split('.')[0].replace('v', '')); }
   get fileLocalVersion() { return Number(this.fileVersion.split('.')[1]); }
   get fileTitle() { return this.head.file_title; }
   set fileTitle(v) { this.head.file_title = v; }

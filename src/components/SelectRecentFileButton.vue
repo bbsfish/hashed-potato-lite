@@ -69,7 +69,7 @@ export default {
         let dataHandle;
 
         // ファイルが平文の場合はそのままインポート
-        if (!DataHandle.isEncryptedXml(xml)) dataHandle = await DataHandle.import(xml);
+        if (DataHandle.isPlainXml(xml)) dataHandle = await DataHandle.import(xml);
 
         // ファイルが暗号化されている場合、認証情報を収集してからインポート
         else {
