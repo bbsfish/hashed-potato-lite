@@ -14,6 +14,7 @@
 </template>
 
 <script>
+import { mapGetters } from 'vuex';
 import IconChevronUp from '@/components/icons/IconChevronUp.vue';
 import IconGear from '@/components/icons/IconGear.vue';
 
@@ -27,6 +28,9 @@ export default {
     return {
       isHidden: false,
     };
+  },
+  computed: {
+    ...mapGetters(['dataHandle']),
   },
   methods: {
     toggleHeader() {

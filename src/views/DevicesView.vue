@@ -14,10 +14,10 @@
       <p>以下のファイルが選択されました。よろしいですか?</p>
       <div v-if="dataHandle">
         <p><span>ファイル名</span><span>{{ fileHandle.name }}</span></p>
-        <p><span>ファイルID</span><span>{{ dataHeadHandle.fileId }}</span></p>
-        <p><span>ファイルラベル</span><span>{{ dataHeadHandle.fileName }}</span></p>
-        <p><span>ファイル概要</span><span>{{ dataHeadHandle.fileDescription }}</span></p>
-        <p><span>最終更新日時</span><span>{{ new Date(dataHeadHandle.updatedAt).toLocaleString() }}</span></p>
+        <p><span>ファイルID</span><span>{{ head.fileId }}</span></p>
+        <p><span>ファイルラベル</span><span>{{ head.fileName }}</span></p>
+        <p><span>ファイル概要</span><span>{{ head.fileDescription }}</span></p>
+        <p><span>最終更新日時</span><span>{{ new Date(head.updatedAt).toLocaleString() }}</span></p>
         <button class="register-button" @click="step = 'generating'">はい、登録を続行します</button>
       </div>
     </section>
@@ -65,7 +65,7 @@ export default {
   },
   computed: {
     ...mapGetters(['dataHandle', 'fileHandle']),
-    dataHeadHandle() {
+    head() {
       return this.dataHandle ? this.dataHandle.getHead() : null;
     }
   },
@@ -73,7 +73,7 @@ export default {
     async generateQrCode() {
       try {
         const userNetInfo = await api.getNetInfo(); // ユーザのネットワーク情報を取得
-        const fileId = this.dataHeadHandle.fileId;
+        const fileId = this.head.fileId;
         const params = {
           user_id: fileId,
           ip_address: userNetInfo.ip,

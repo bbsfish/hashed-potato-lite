@@ -15,6 +15,22 @@ const fxp = {
   parser: new XMLParser({
     ignoreAttributes: false,    // 属性値を有効化
     attributeNamePrefix: '_',   // 属性のプレフィックスを設定
+    numParseOptions:{
+      leadingZeros: true,
+    },
+    tagValueProcessor: (tagName, v, tagPath) => {
+      // 以下の条件以外は文字列としてパース
+      let res = v;
+      // 数値としてパースするタグ
+      // if (['root.body.sequence.table.#text'].includes(tagPath)) res = Number(v);
+      // if (['sn', 'st', 'number'].includes(tagName)) res = Number(v);
+      // 文字列としてパースするタグ
+      if (['root.head.file_version'].includes(tagPath)) res = v.toString();
+      // 真偽値としてパースするタグ
+      if (['root.head.is_encrypted'].includes(tagPath)) res = v === 'true';
+      // console.log({ tagName, tagPath, v, res });
+      return res;
+    },
     isArray: (_, tagPath) => {
       return alwaysArray.includes(tagPath);
     },
@@ -202,7 +218,7 @@ class DataHandle {
       const salt = base64ToArrayBuffer(saltBase64);
       const bodyXml = await decrypt(data.root.body.trim(), iv, salt, password, data.root.head.file_id);
 
-      // 復号したXML (body部分) をパースして、元のデータにマージする
+      // 復号したXML（body部分）をパースして、元のデータにマージする
       data.root.body = fxp.parser.parse(bodyXml);
 
       return new DataHandle(data);
@@ -217,8 +233,17 @@ class DataHandle {
    * @return {{ xml: string, ivBase64: string, saltBase64: string }} エクスポート情報
    */
   async export(password = null) {
-    // 0. 更新日時を更新する
+    // 0-1. 更新日時およびバージョン情報を更新する
     this.data.root.head.updated_at = getISOString();
+    this.data.root.head.file_version = (() => {
+      const ver = String(this.data.root.head.file_version);
+      // バージョン形式が X の場合は小数部分に 1 を付与して X.1 に変換
+      if (ver.match(/^\d+$/)) return `${ver}.1`;
+      // バージョン形式が X.Y の場合は Y に 1 を足す
+      const sysVer = ver.split('.')[0];
+      const cuurentVer = Number(ver.split('.')[1]);
+      return `${sysVer}.${cuurentVer + 1}`;
+    })();
 
     // 1-1. 暗号化がオフの場合はそのままビルドする
     if (!this.data.root.head.is_encrypted) {
@@ -313,16 +338,24 @@ class HeadData extends DataHandle {
 
   // 各プロパティのゲッターとセッター
   get fileId() { return this.head.file_id; }
-  get fileVersion() { return this.head.file_version; }
-  set fileVersion(value) { this.head.file_version = value; }
+  get fileVersion() {
+    const ver = String(this.data.root.head.file_version);
+    // バージョン形式が "X" の場合は小数部分に "0" を付与して "X.0" に変換
+    if (ver.match(/^\d+$/)) return `${ver}.0`;
+    // バージョン形式が "X.Y" の場合はそのまま返す
+    return ver;
+  }
+  set fileVersion(v) { this.head.file_version = (typeof v === 'string') ? v : String(v); }
+  get fileSystemVersion() { return Number(this.fileVersion.split('.')[0]); }
+  get fileLocalVersion() { return Number(this.fileVersion.split('.')[1]); }
   get fileTitle() { return this.head.file_title; }
-  set fileTitle(value) { this.head.file_title = value; }
+  set fileTitle(v) { this.head.file_title = v; }
   get fileDescription() { return this.head.file_description; }
-  set fileDescription(value) { this.head.file_description = value; }
+  set fileDescription(v) { this.head.file_description = v; }
   get createdAt() { return this.head.created_at; }
   get updatedAt() { return this.head.updated_at; }
   get isEncrypted() { return this.head.is_encrypted; }
-  set isEncrypted(value) { this.head.is_encrypted = value; }
+  set isEncrypted(v) { this.head.is_encrypted = v; }
 
   // options 関連の操作
   getOptions() { return this.head.options; }
