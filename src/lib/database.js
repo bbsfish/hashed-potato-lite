@@ -114,7 +114,7 @@ class Database {
     return this._execute('files', 'readonly', store => store.get(id));
   }
 
-  async addFile(id, handle, name) {
+  async addFile(id, handle, name, label) {
     const db = await this.open();
     return new Promise((resolve, reject) => {
       const transaction = db.transaction('files', 'readwrite');
@@ -129,7 +129,7 @@ class Database {
         }
 
         const now = new Date();
-        const newFile = { id, handle, name, created_at: now, updated_at: now };
+        const newFile = { id, handle, name, label, created_at: now, updated_at: now };
         const addRequest = store.add(newFile);
         addRequest.onsuccess = () => resolve(addRequest.result);
       };

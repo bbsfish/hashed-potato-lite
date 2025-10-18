@@ -8,6 +8,11 @@
         <small>ファイルのユニークなIDです。変更はできません。</small>
       </div>
       <div class="setting-item">
+        <label>ファイルSID</label>
+        <p class="value">{{ head.fileSId }}</p>
+        <small>ファイルIDから生成された、ファイルのユニークな短縮IDです。変更はできません。</small>
+      </div>
+      <div class="setting-item">
         <label>ファイルバージョン</label>
         <p class="value">{{ head.fileVersion }}</p>
         <small>ファイルのバージョンです。変更はできません。</small>

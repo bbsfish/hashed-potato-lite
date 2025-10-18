@@ -23,6 +23,7 @@ import FileSystem from '@/lib/file-system';
 import { DataHandle } from '@/lib/data-handle';
 import LoadingOverlay from '@/components/LoadingOverlay.vue';
 import IconCloud from '@/components/icons/IconCloud.vue';
+import { mapGetters, mapMutations } from 'vuex';
 const db = new Database();
 const fs = new FileSystem();
 
@@ -40,7 +41,11 @@ export default {
       loadingMessage: '',
     };
   },
+  computed: {
+    ...mapGetters(['isClientPasswordSet', 'isModified', 'isClientPasswordSet']),
+  },
   methods: {
+    ...mapMutations(['setClientPassword', 'setFileHandle', 'setDataHandle', 'setModified']),
     async toggleFileList() {
       // リストが表示されていない間に、最近使用したファイルを読み込む
       if (!this.isFileListShown) {
@@ -53,6 +58,7 @@ export default {
           this.$snackbar('最近使用したファイルの読み込みに失敗しました');
         }
       }
+      
       this.isFileListShown = !this.isFileListShown;
     },
     async openFile(file) {
@@ -67,25 +73,41 @@ export default {
         if (!xml) throw new Error('ファイルの内容の読み込みに失敗しました');
 
         let dataHandle;
+        let isOverwrite = false;
 
         // ファイルが平文の場合はそのままインポート
         if (DataHandle.isPlainXml(xml)) dataHandle = await DataHandle.import(xml);
 
         // ファイルが暗号化されている場合、認証情報を収集してからインポート
         else {
-          // マスターパスワードを収集
-          const clientPassword = await this.$dialog.prompt(
-            'このファイルは暗号化されています。マスターパスワードを入力してください',
-            { inputType: 'password', forceNull: true }
-          );
-          if (!clientPassword) throw new Error('ファイルのオープンがキャンセルされました');
+          // ストアのクライアントパスワードを確認
+          if (this.isClientPasswordSet && this.isModified) {
+            isOverwrite = await this.$dialog.confirm('ファイルが既に開かれており、変更されています。\nこのまま続行すると、現在のファイルに対する変更が保存されません。\nよろしいですか?');
+            if (!isOverwrite) return this.$snackbar('ファイルの読み込みがキャンセルされました');
+          }
+
+          // クライアントパスワードを収集
+          let clientPassword;
+          this.loadingMessage = 'マスターパスワードの入力を待機中...';
+          let message = 'このファイルは暗号化されています。\n4桁以上のマスターパスワードを入力してください';
+          do {
+            clientPassword = await this.$dialog.password(message);
+            if (clientPassword && clientPassword.length < 4) {
+              message = 'マスターパスワードは4桁以上である必要があります。\n再度入力してください';
+              clientPassword = '';
+            }
+          } while (clientPassword === '');
+          if (clientPassword === null) return this.$snackbar('ファイルのオープンがキャンセルされました');
+          clientPassword = clientPassword.trim();
+          this.setClientPassword({ pw: clientPassword, isOverwrite });
 
           // ワンタイムパスワードを収集してサーバーに問い合わせ
-          const token = await this.$dialog.prompt(
-            'ワンタイムパスワードを入力してください',
-            { inputType: 'number', forceNull: true }
-          );
-          if (!token) throw new Error('ファイルのオープンがキャンセルされました');
+          this.loadingMessage = 'ワンタイムパスワードの入力を待機中...';
+          let token = null;
+          do {
+            token = await this.$dialog.prompt('ワンタイムパスワードを入力してください', { inputType: 'number' });
+          } while (token === '');
+          if (token === null) return this.$snackbar('ファイルのオープンがキャンセルされました');
 
           // ワンタイムパスワードをサーバーに問い合わせて検証し、暗号化情報を取得
           this.loadingMessage = 'ワンタイムパスワードを検証しています...';
@@ -97,23 +119,22 @@ export default {
             ip_address: userNetInfo.ip,
             region: userNetInfo.timezone,
           });
-          if (result.status === 'error') throw new Error('ワンタイムパスワードの検証に失敗しました');
+          if (result.status === 'error') throw new Error('ワンタイムパスワードが不正です。\nファイルは開かれませんでした。もう一度お試しください');
 
           // サーバーから受け取った暗号化情報を使ってファイルを復号
-          this.loadingMessage = 'ファイルを復号しています...';
+          this.loadingMessage = 'ファイルを複合化しています...';
           const fullPassword = clientPassword + result.server_password;
           dataHandle = await DataHandle.import(xml, fullPassword, result.iv_base64, result.salt_base64);
         }
 
         // Vuex ストアに DataHandle と FileHandle を保存
-        this.$store.commit('setFileHandle', fileHandle);
-        this.$store.commit('setDataHandle', dataHandle);
-        this.$store.commit('setModified', false);
+        this.setFileHandle({ handle: fileHandle, isOverwrite });
+        this.setDataHandle({ handle: dataHandle, isOverwrite });
 
-        this.$snackbar(`ファイル「${fileHandle.name}」を開きました`);
+        this.$snackbar(`${fileHandle.name} を開きました`);
       } catch (err) {
-        console.error('Error opening file:', err);
-        this.$dialog.alert(err.message || 'ファイルのオープンに失敗しました');
+        console.error(err);
+        this.$dialog.alert('ファイルのオープンに失敗しました: ' + err.message);
       } finally {
         this.isLoading = false;
         this.loadingMessage = '';

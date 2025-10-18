@@ -3,6 +3,7 @@
     <h1>デバイス登録 (TOTP)</h1>
     <div v-if="!dataHandle">
       <p>新しい TOTP デバイスを登録するには、まずファイルを選択または作成してください。</p>
+      <p><router-link :to="{ name: 'Home' }">ホームに戻る</router-link></p>
     </div>
     <div v-else>
       <section class="initial" v-if="step === 'initial'">
@@ -18,10 +19,18 @@
         <p>以下のファイルが選択されました。よろしいですか?</p>
         <p class="file-info"><span>ファイル名</span><span>{{ fileHandle.name }}</span></p>
         <p class="file-info"><span>ファイルID</span><span>{{ head.fileId }}</span></p>
+        <p class="file-info"><span>ファイルSID</span><span>{{ head.fileSId }}</span></p>
         <p class="file-info"><span>ファイルラベル</span><span>{{ head.fileTitle }}</span></p>
         <p class="file-info"><span>ファイル概要</span><span>{{ head.fileDescription }}</span></p>
         <p class="file-info"><span>最終更新日時</span><span>{{ new Date(head.updatedAt).toLocaleString() }}</span></p>
-        <button class="register-button" @click="step = 'generating'">はい、登録を続行します</button>
+        <button class="register-button" @click="step = 'labeling'">はい、登録を続行します</button>
+      </section>
+      <section class="labeling" v-if="step === 'labeling'">
+        <p>デバイスの認証アプリに表示する名前を入力してください。(英数字、4文字以上、32文字以下)</p>
+        <p style="color: red" v-if="errorMessage">{{ errorMessage }}</p>
+        <input type="text" minlength="4" maxlength="32" v-model="vmUserLabel" />
+        <p>このように表示されます:<br />"HashedPotatoLite: {{ encodedUserLabel }}({{ head.fileSId }})"</p>
+        <button class="register-button" @click="registerUserLabel">この名前で登録</button>
       </section>
       <section class="generating" v-if="step == 'generating'">
         <LoadingSpinner m="QRコードを生成しています..." />
@@ -60,21 +69,31 @@ export default {
       qrCodeDataUrl: null,
       secret: null, // サーバーから受け取ったシークレットを保持
       verificationCode: '',
+      vmUserLabel: '',
+      errorMessage: '',
     };
   },
   computed: {
     ...mapGetters(['dataHandle', 'fileHandle']),
     head() {
       return this.dataHandle ? this.dataHandle.getHead() : null;
-    }
+    },
+    encodedUserLabel() {
+      return encodeURI(this.vmUserLabel.trim());
+    },
   },
   methods: {
+    registerUserLabel() {
+      if (this.vmUserLabel.length < 4 || this.vmUserLabel.length > 32) this.errorMessage = '文字数を確認してください';
+      this.step = 'generating';
+    },
     async generateQrCode() {
       try {
         const userNetInfo = await api.getNetInfo(); // ユーザのネットワーク情報を取得
         const fileId = this.head.fileId;
         const params = {
           file_id: fileId,
+          label: `HashedPotatoLite: ${this.encodedUserLabel}(${this.head.fileSId})`,
           ip_address: userNetInfo.ip,
           region: userNetInfo.timezone,
         }
@@ -86,20 +105,6 @@ export default {
         this.step = 'initial';
       }
     },
-    async verifyCode() {
-        if (this.verificationCode.length !== 6 || !/^\d{6}$/.test(this.verificationCode)) {
-            this.$dialog.alert('有効な6桁のコードを入力してください。');
-            return;
-        }
-        // TODO: 本来はここでサーバーに確認コードを送信して検証する
-        // 今回はフロントエンドのみの実装のため、成功したと仮定する
-        console.log('Verification code:', this.verificationCode);
-        console.log('Secret:', this.secret);
-        await this.$dialog.alert('デバイスの登録が完了しました。');
-        this.qrCodeDataUrl = null;
-        this.verificationCode = '';
-        this.secret = null;
-    }
   },
   watch: {
     dataHandle() {

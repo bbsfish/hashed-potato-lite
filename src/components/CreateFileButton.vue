@@ -10,6 +10,7 @@ import FileSystem from '@/lib/file-system';
 import { DataHandle } from '@/lib/data-handle';
 import Database from '@/lib/database';
 import IconPlus from '@/components/icons/IconPlus.vue'; // Note: You need to create this icon component.
+import { mapGetters } from 'vuex';
 
 const fs = new FileSystem();
 const db = new Database();
@@ -19,44 +20,57 @@ export default {
   components: {
     IconPlus,
   },
+  computed: {
+    ...mapGetters(['fileHandle', 'dataHandle', 'isModified'])
+  },
   methods: {
     async createFile() {
       try {
-        // 1. ダイアログでファイル名を入力
-        const title = await this.$dialog.prompt('新しいファイルの名前を入力してください', true);
-        if (!title) {
-          this.$snackbar('ファイル作成がキャンセルされました');
-          return;
+        // 現在のファイル選択チェック
+        let isOverwrite = false;
+        if (this.fileHandle && this.isModified) {
+          isOverwrite = await this.$dialog.confirm('ファイルが既に開かれており、変更されています。\nこのまま続行すると、現在のファイルに対する変更が保存されません。\nよろしいですか?');
+          if (!isOverwrite) return this.$snackbar('ファイルの作成がキャンセルされました');
         }
 
-        // 2. DataHandleを使用して初期XMLコンテンツを作成
+        // ファイル名を入力
+        let title;
+        let message = '新しいファイルの名前を入力してください';
+        do {
+          title = await this.$dialog.prompt(message);
+          if (title === null) return this.$snackbar('ファイルの作成がキャンセルされました');
+          title = title.trim();
+          if (title === '') message = 'ファイルの名前を空欄にすることはできません。新しいファイルの名前を入力してください';
+        } while (title === '');
+
+        // XML コンテンツを作成
         const dataHandle = new DataHandle();
         const head = dataHandle.getHead();
         head.fileTitle = title;
-        this.$store.commit('setModified', true);
-        const initialContent = await dataHandle.export();
-        
-        // 3. ファイルを保存
-        const fileHandle = await fs.pickAndSaveFile(initialContent, {
+        const { xml } = await dataHandle.export();
+
+        // ファイルを保存
+        const fileHandle = await fs.pickAndSaveFile(xml, {
           types: [{
             description: 'Hashed Potato Lite File',
-            accept: { 'text/xml': ['.xml'] },
+            accept: { 'text/xml': ['.hpl'] },
           }],
-        }, `${title}.xml`);
+        }, `${title}.hpl`);
+        if (!fileHandle) return this.$snackbar('ファイルの作成がキャンセルされました');
+
+        // fileHandle および dataHandle をストアへ保存、ファイルの編集状態をリセット
+        this.$store.commit('setDataHandle', { handle: dataHandle, isOverwrite });
+        this.$store.commit('setFileHandle',  { handle: fileHandle, isOverwrite });
         this.$store.commit('setModified', false);
 
-        if (fileHandle) {
-          this.$store.commit('setDataHandle', dataHandle);
-          this.$store.commit('setFileHandle', fileHandle);
-          // 4. IndexedDBにファイルハンドルを保存
-          await db.addFile(head.fileId, fileHandle, fileHandle.name);
-          this.$snackbar(`ファイル「${fileHandle.name}」を作成しました`);
-        } else {
-          this.$snackbar('ファイル作成がキャンセルされました');
-        }
+        // IDB にファイルハンドルを保存
+        await db.addFile(head.fileId, fileHandle, fileHandle.name, title);
+        
+        this.$snackbar(`${fileHandle.name} を作成しました`);
 
-      } catch (error) {
-        this.$dialog.alert('ファイルの作成中にエラーが発生しました');
+      } catch (err) {
+        console.error(err);
+        this.$dialog.alert('ファイルの作成中にエラーが発生しました: ' + err.message);
       }
     },
   },

@@ -6,6 +6,7 @@
         <router-link :to="{ name: 'PasswordGenerator' }">パスワード生成</router-link>
         <router-link :to="{ name: 'Devices' }">デバイス登録</router-link>
         <router-link v-if="dataHandle" :to="{ name: 'FileConfig' }">ファイル設定</router-link>
+        <router-link v-if="dataHandle" :to="{ name: 'FileEditor' }">ファイル編集</router-link>
       </nav>
     </div>
     <div class="toggle-button" @click="toggleHeader" title="ヘッダーの表示切り替え">

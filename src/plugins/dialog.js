@@ -1,10 +1,12 @@
 import { createApp, h, ref } from 'vue';
+import IconEye from '@/components/icons/IconEye.vue';
+import IconEyeSlash from '@/components/icons/IconEyeSlash.vue';
 
 // --- ダイアログコンポーネントの定義 ---
 const DialogComponent = {
   name: 'DialogComponent',
   props: {
-    // 表示モード ('alert', 'confirm', 'prompt')
+    // 表示モード ('alert', 'confirm', 'prompt', 'password')
     mode: {
       type: String,
       default: 'confirm',
@@ -32,37 +34,60 @@ const DialogComponent = {
   },
   emits: ['close'],
   
-  // promptモードでの入力値を保持
   setup() {
     const inputValue = ref('');
-    return { inputValue };
+    const isPasswordVisible = ref(false);
+    return { inputValue, isPasswordVisible };
   },
 
   render() {
     // --- 子要素の動的な構築 ---
+    // メッセージを \n で改行する
+    const lines = this.message.split('\n');
+    const separater = h('br');
+    const messageNodes = lines.map((ln, i) => [i*2, ln])
+      .concat(
+        Array.from({length: lines.length - 1}).map((_, i) => [i*2+1, separater])
+      )
+      .sort().map((tuple=>tuple[1]));
+
     const children = [
       // メッセージ
-      h('p', { class: 'dialog-message' }, this.message),
+      h('p', { class: 'dialog-message' }, messageNodes),
     ];
 
-    // promptモードの場合、input要素を追加
-    if (this.mode === 'prompt') {
-      children.push(
-        h('input', {
-          class: 'dialog-input',
-          type: this.inputType,
-          value: this.inputValue,
-          onInput: (event) => (this.inputValue = event.target.value),
-          // ref属性はrender関数内ではこのように扱う
-          ref: 'promptInput' 
-        })
-      );
+    // promptまたはpasswordモードの場合、input要素を追加
+    if (this.mode === 'prompt' || this.mode === 'password') {
+      const inputType = this.mode === 'password' && !this.isPasswordVisible
+          ? 'password'
+          : 'text';
+          
+      const inputNode = h('input', {
+        class: 'dialog-input',
+        type: inputType,
+        value: this.inputValue,
+        onInput: (event) => (this.inputValue = event.target.value),
+        ref: 'promptInput' 
+      });
+
+      // passwordモードの場合、表示切替アイコンを追加
+      if (this.mode === 'password') {
+        const iconComponent = this.isPasswordVisible ? IconEyeSlash : IconEye;
+        const toggleIcon = h(iconComponent, {
+          class: 'password-toggle-icon',
+          onClick: () => (this.isPasswordVisible = !this.isPasswordVisible),
+        });
+        children.push(h('div', { class: 'input-wrapper' }, [inputNode, toggleIcon]));
+      } else {
+        // promptモードの場合はinput要素を直接追加
+        children.push(h('div', { class: 'input-wrapper' }, [inputNode]));
+      }
     }
     
     // --- ボタンの動的な構築 ---
     const buttons = [];
-    // confirmまたはpromptモードの場合、キャンセルボタンを追加
-    if (this.mode === 'confirm' || this.mode === 'prompt') {
+    // confirm, prompt, passwordモードの場合、キャンセルボタンを追加
+    if (['confirm', 'prompt', 'password'].includes(this.mode)) {
       buttons.push(
         h('button', { class: 'dialog-button cancel', onClick: this.handleCancel }, 'キャンセル')
       );
@@ -84,17 +109,18 @@ const DialogComponent = {
     // OKボタンの処理
     handleConfirm() {
       const result = (() => {
-        let r = true;
-        if (this.mode === 'prompt' && this.forceNull && this.inputValue === '') return null;
-        else if (this.mode === 'prompt') return this.inputValue;
+        if (this.mode === 'prompt' || this.mode === 'password') {
+            if(this.forceNull && this.inputValue === '') return null;
+            return this.inputValue;
+        }
         return true;
       })();
       this.onClose(result);
     },
     // キャンセルボタンの処理
     handleCancel() {
-      // promptではnull、confirmではfalseを返す
-      const result = (this.mode === 'prompt') ? null : false;
+      // promptまたはpasswordではnull、confirmではfalseを返す
+      const result = (this.mode === 'prompt' || this.mode === 'password') ? null : false;
       this.onClose(result);
     },
     // オーバーレイのクリック処理
@@ -108,7 +134,9 @@ const DialogComponent = {
       if (e.key === 'Escape') {
         this.handleCancel();
       }
-      if (e.key === 'Enter' && this.mode === 'prompt') {
+      if (e.key === 'Enter' && (this.mode === 'prompt' || this.mode === 'password')) {
+        // Enterキーでのサブミットを止める
+        e.preventDefault();
         this.handleConfirm();
       }
     },
@@ -116,8 +144,8 @@ const DialogComponent = {
 
   mounted() {
     document.addEventListener('keydown', this.handleKeydown);
-    // promptモードの場合、inputに自動でフォーカスを当てる
-    if (this.mode === 'prompt') {
+    // promptまたはpasswordモードの場合、inputに自動でフォーカスを当てる
+    if (this.mode === 'prompt' || this.mode === 'password') {
         this.$refs.promptInput.focus();
     }
   },
@@ -179,34 +207,68 @@ const DialogPlugin = {
       /**
        * 入力ダイアログを表示します。
        * @param {string} message - 表示するメッセージ
-       * @param {string} forceNull - 入力値が空の場合、OKを押してもnullを返します
+       * @param {object} [options] - オプション
+       * @param {boolean} [options.forceNull=false] - 入力値が空の場合、OKを押してもnullを返します
+       * @param {string} [options.inputType='text'] - input要素のtype属性
        * @returns {Promise<string|null>} OKで入力文字列, キャンセルでnullを返します
        */
-      prompt(message, { forceNull = false, inputType = 'text' }) {
+      prompt(message, { forceNull = false, inputType = 'text' } = {}) {
         return createDialog('prompt', { message, forceNull, inputType });
+      },
+
+      /**
+       * パスワード入力ダイアログを表示します。
+       * @param {string} message - 表示するメッセージ
+       * @param {object} [options] - オプション
+       * @param {boolean} [options.forceNull=false] - 入力値が空の場合、OKを押してもnullを返します
+       * @returns {Promise<string|null>} OKで入力文字列, キャンセルでnullを返します
+       */
+      password(message, { forceNull = false } = {}) {
+        return createDialog('password', { message, forceNull, inputType: 'password' });
       },
     };
 
-    // --- スタイルの注入 (prompt用のスタイルを追加) ---
+    // --- スタイルの注入 (prompt用のスタイルとパスワード表示用のスタイルを追加) ---
     const style = document.createElement('style');
     style.textContent = `
       .dialog-overlay {
         position: fixed; top: 0; left: 0; width: 100%; height: 100%;
         background-color: rgba(0, 0, 0, 0.5);
         display: flex; justify-content: center; align-items: center; z-index: 1000;
+        border: none;
       }
       .dialog-box {
         background-color: white; padding: 24px; border-radius: 8px;
         box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
-        min-width: 320px; max-width: 90%; text-align: center;
+        min-width: 320px; max-width: calc(90% - 48px);
       }
       .dialog-message {
         margin: 0 0 20px; font-size: 16px; color: #333;
       }
-      .dialog-input { /* prompt用inputのスタイル */
-        display: block; width: 100%; padding: 8px; margin-bottom: 20px;
+      .input-wrapper {
+        position: relative;
+        display: flex;
+        align-items: center;
+        margin-bottom: 20px;
+      }
+      .dialog-input {
+        width: 100%; padding: 8px;
         font-size: 16px; border: 1px solid #ccc; border-radius: 4px;
         box-sizing: border-box;
+      }
+      .input-wrapper .dialog-input {
+        padding-right: 40px; /* アイコンのスペースを確保 */
+      }
+      .password-toggle-icon {
+        position: absolute;
+        right: 10px;
+        cursor: pointer;
+        color: #777;
+        width: 1.2rem;
+        height: 1.2rem;
+        display: flex;
+        align-items: center;
+        justify-content: center;
       }
       .dialog-buttons {
         display: flex; justify-content: flex-end; gap: 12px;

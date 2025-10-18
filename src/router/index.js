@@ -4,6 +4,7 @@ import PasswordGeneratorView from '@/views/PasswordGeneratorView.vue';
 import DevicesView from '@/views/DevicesView.vue';
 import FileConfigView from '@/views/FileConfigView.vue';
 import FileEncryptionView from '@/views/FileEncryptionView.vue';
+import FileEditorView from '@/views/FileEditorView.vue';
 
 const routes = [
   {
@@ -30,6 +31,11 @@ const routes = [
     path: '/file-encryption',
     name: 'FileEncryption',
     component: FileEncryptionView,
+  },
+  {
+    path: '/file-editor',
+    name: 'FileEditor',
+    component: FileEditorView,
   }
 ];
 

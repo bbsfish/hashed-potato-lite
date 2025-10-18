@@ -6,8 +6,15 @@ const alwaysArray = [
   'root.head.options.column_order.col',
   'root.head.options.invisible_columns.col',
   'root.body.sequence.table',
+  'sequence.table',
   'root.body.tables.table',
+  'tables.table',
   'root.body.tables.table.tbody.ac',
+  'tables.table.tbody.ac',
+  'root.body.tables.table.tbody.ac.em',
+  'tables.table.tbody.ac.em',
+  'root.body.tables.table.tbody.ac.pw',
+  'tables.table.tbody.ac.pw',
 ];
 
 // XML パーサーとビルダーのオプション設定およびインスタンス
@@ -17,19 +24,6 @@ const fxp = {
     attributeNamePrefix: '_',   // 属性のプレフィックスを設定
     numParseOptions:{
       leadingZeros: true,
-    },
-    tagValueProcessor: (tagName, v, tagPath) => {
-      // 以下の条件以外は文字列としてパース
-      let res = v;
-      // 数値としてパースするタグ
-      // if (['root.body.sequence.table.#text'].includes(tagPath)) res = Number(v);
-      // if (['sn', 'st', 'number'].includes(tagName)) res = Number(v);
-      // 文字列としてパースするタグ
-      if (['root.head.file_version'].includes(tagPath)) res = v.toString();
-      // 真偽値としてパースするタグ
-      if (['root.head.is_encrypted'].includes(tagPath)) res = v === 'true';
-      // console.log({ tagName, tagPath, v, res });
-      return res;
     },
     isArray: (_, tagPath) => {
       return alwaysArray.includes(tagPath);
@@ -50,6 +44,39 @@ const fxp = {
 const getISOString = () => new Date().toISOString();
 const getRandomUUID = () => window.crypto.randomUUID();
 const getRandomInt = (min, max) => Math.floor(Math.random() * (1 + max - min)) + min;
+
+/**
+ * UUID を Base58 にエンコードする
+ * @param {string} uuid - エンコードする UUID
+ * @returns {string} Base58 エンコードされた UUID
+ */
+function uuidToBase58(uuid) {
+  const base58Chars = '123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz';
+
+  const bytes = (() => {
+    const hex = uuid.replace(/-/g, '');
+    const bytes = new Uint8Array(hex.length / 2);
+    for (let i = 0; i < bytes.length; i++) {
+      bytes[i] = parseInt(hex.slice(i * 2, i * 2 + 2), 16);
+    }
+    return bytes;
+  })();
+
+  let num = BigInt('0x' + [...bytes].map(b => b.toString(16).padStart(2, '0')).join(''));
+  let result = '';
+  while (num > 0n) {
+    const remainder = num % 58n;
+    result = base58Chars[Number(remainder)] + result;
+    num = num / 58n;
+  }
+
+  for (const byte of bytes) {
+    if (byte === 0) result = '1' + result;
+    else break;
+  }
+
+  return result;
+}
 
 /** 
  * Base64 文字列を ArrayBuffer に変換する
@@ -191,6 +218,7 @@ class DataHandle {
     else {
       this.data = parsedXmlData;
     }
+    console.debug('[DataHandle] data at creating instance:', this.data);
   }
 
   static isEncryptedXml(xmlString) {
@@ -219,6 +247,7 @@ class DataHandle {
   static async import(xmlString, password = null, ivBase64 = null, saltBase64 = null) {
     // 1. 初回のパース
     const data = fxp.parser.parse(xmlString);
+    if (Object.keys(data).length === 0) throw new Error('ファイルデータのパースに失敗しました');
 
     // 2-1. 暗号化がオフの場合はそのまま DataHandle インスタンスを返す
     if (!data.root.head.is_encrypted) return new DataHandle(data);
@@ -248,6 +277,7 @@ class DataHandle {
    * @return {{ xml: string, ivBase64: string, saltBase64: string }} エクスポート情報
    */
   async export(password = null) {
+    console.debug('[DataHandle] Building data:', this.data);
     // 暗号化が有効の場合、ヘッダ情報を更新する
     if (password) this.data.root.head.is_encrypted = true;
     
@@ -257,7 +287,7 @@ class DataHandle {
       const ver = this.data.root.head.file_version;
       const sysVer = ver.split('.')[0];
       const localVer = Number(ver.split('.')[1]);
-      return `v${sysVer}.${localVer + 1}`;
+      return `${sysVer}.${localVer + 1}`;
     })();
 
     // 2-1. 暗号化がオフの場合はそのままビルドして終了
@@ -323,10 +353,6 @@ class DataHandle {
     };
   }
 
-  getFileId() {
-    return this.data.root.head.file_id;
-  }
-
   /**
    * HeadData のインスタンスを取得する
    * @returns {HeadData}
@@ -351,13 +377,14 @@ class DataHandle {
  */
 class HeadData extends DataHandle {
   constructor(data) {
-    super();
-    this.data = data;
+    super(data);
     this.head = this.data.root.head;
+    console.debug('[DataHandle.HeadData] data at creating instance:', this.data);
   }
 
   // 各プロパティのゲッターとセッター
   get fileId() { return this.head.file_id; }
+  get fileSId() { return 'S' + uuidToBase58(this.head.file_id.replace('HPL-', '')); }
   get fileVersion() {
     const ver = String(this.data.root.head.file_version);
     // バージョン形式が X の場合は小数部分に 0 を付与して X.0 に変換
@@ -393,14 +420,11 @@ class HeadData extends DataHandle {
  */
 class OptionsData extends HeadData {
   constructor(data) {
-    super();
-    this.data = data;
+    super(data);
     this.options = this.data.root.head.options;
   }
 
   get columnAlias() {
-    // column_alias が設定されてない場合は空配列を返す
-    if (this.options.column_alias === '') return [];
     // column_alias が設定されている場合、既定の形式にフォーマットして返す
     if (this.options.column_alias.col) {
       return this.options.column_alias.col.map((c) => ({ id: c._id, alias: c['#text'] }));
@@ -409,14 +433,10 @@ class OptionsData extends HeadData {
     return [];
   }
   get columnOrder() {
-    // column_order が設定されてない場合は空配列を返す
-    if (this.options.column_order === '') return [];
     // column_order が設定されている場合はそのまま返す。それ以外は空配列を返す
     return this.options.column_order.col || [];
   }
   get invisibleColumns() {
-    // invisible_columns が設定されてない場合は空配列を返す
-    if (this.options.invisible_columns === '') return [];
     // invisible_columns が設定されている場合はそのまま返す。それ以外は空配列を返す
     return this.options.invisible_columns.col || [];
   }
@@ -489,9 +509,9 @@ class OptionsData extends HeadData {
  */
 class BodyData extends DataHandle {
   constructor(data) {
-    super();
-    this.data = data;
+    super(data);
     this.body = this.data.root.body;
+    console.debug('[DataHandle.BodyData] data at creating instance:', this.data);
   }
 
   /**
@@ -501,6 +521,12 @@ class BodyData extends DataHandle {
    * @returns {TableData} 追加されたテーブルの TableData インスタンス
    */
   addTable(tableName = '', tableSummary = '') {
+    // sequence.table および tables.table が存在しない場合は初期化する
+    if (!this.body.sequence) this.body.sequence = { table: [] };
+    if (!this.body.sequence.table) this.body.sequence.table = [];
+    if (!this.body.tables) this.body.tables = { table: [] };
+    if (!this.body.tables.table) this.body.tables.table = [];
+
     const now = getISOString();
 
     // 一意のテーブル ID が生成されるまで繰り返す
@@ -541,7 +567,7 @@ class BodyData extends DataHandle {
    * @returns {TableData[]}
    */
   getTables() {
-    return this.body.sequence.table.map((t) => new TableData(this.data, t._id));
+    return (this.body.sequence.table || []).map((t) => new TableData(this.data, t._id));
   }
 
   /**
@@ -623,7 +649,15 @@ class TableData extends BodyData {
 
   // テーブルメタデータのゲッター
   get name() { return this.table.thead.nm; }
+  set name(newName) {
+    this.table.thead.nm = newName;
+    this.table.thead.ua = getISOString();
+  }
   get summary() { return this.table.thead.sm; }
+    set summary(newSummary) {
+    this.table.thead.sm = newSummary;
+    this.table.thead.ua = getISOString();
+  }
   get id() { return this.table.thead.id; }
   get createdAt() { return this.table.thead.ca; }
   get updatedAt() { return this.table.thead.ua; }
@@ -681,4 +715,13 @@ export {
   BodyData,
   TableData,
   AccountData,
+  getISOString,
+  getRandomUUID,
+  getRandomInt,
+  uuidToBase58,
+  base64ToArrayBuffer,
+  arrayBufferToBase64,
+  deriveKey,
+  encrypt,
+  decrypt,
 };

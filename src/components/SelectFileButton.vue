@@ -15,6 +15,7 @@ import { DataHandle } from '@/lib/data-handle';
 import Database from '@/lib/database';
 import LoadingOverlay from '@/components/LoadingOverlay.vue';
 import IconPaperClip from '@/components/icons/IconPaperClip.vue';
+import { mapGetters } from 'vuex';
 const fs = new FileSystem();
 const db = new Database();
 
@@ -30,6 +31,9 @@ export default {
       loadingMessage: '',
     };
   },
+  computed: {
+    ...mapGetters(['fileHandle', 'isModified']),
+  },
   methods: {
     async selectFile() {
       try {
@@ -37,12 +41,17 @@ export default {
         const fileHandles = await fs.pickFile({
           types: [{
             description: 'Hashed Potato Lite File',
-            accept: { 'text/xml': ['.xml'] },
+            accept: { 'text/xml': ['.hpl'] },
           }],
         });
         if (!fileHandles || fileHandles.length === 0) return this.$snackbar('ファイル選択がキャンセルされました');
         const fileHandle = fileHandles[0];
-        this.$store.commit('setFileHandle', fileHandle);
+        let isOverwrite = false;
+        if (this.fileHandle && this.isModified) {
+          isOverwrite = await this.$dialog.confirm('ファイルが既に開かれており、変更されています。\nこのまま続行すると、現在のファイルに対する変更が保存されません。\nよろしいですか?');
+          if (!isOverwrite) return this.$snackbar('ファイルの選択がキャンセルされました');
+        }
+        this.$store.commit('setFileHandle', { handle: fileHandle, isOverwrite });
 
         // ファイルの内容を読み込み
         this.isLoading = true;
@@ -64,6 +73,7 @@ export default {
             { inputType: 'password', forceNull: true }
           );
           if (!clientPassword) throw new Error('ファイルのオープンがキャンセルされました');
+          this.$store.commit('setClientPassword', clientPassword);
 
           // ワンタイムパスワードを収集してサーバーに問い合わせ
           const token = await this.$dialog.prompt(
