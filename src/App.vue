@@ -1,7 +1,7 @@
 <template>
   <div>
-    <AppHeader />
-    <main>
+    <AppHeader @hidden="isHeaderOpen = false" @open="isHeaderOpen = true" />
+    <main :style="(isHeaderOpen) ? 'padding-top: 60px;' : ''">
       <router-view />
     </main>
   </div>
@@ -13,6 +13,11 @@ import AppHeader from '@/components/AppHeader.vue';
 export default {
   components: {
     AppHeader,
+  },
+  data() {
+    return {
+      isHeaderOpen: true,
+    }
   },
 }
 </script>
@@ -27,9 +32,5 @@ html, body, #app {
   margin: 0;
   padding: 0;
   background-color: #f9f9f9;
-}
-
-main {
-  padding-top: 60px; // ヘッダーの高さ分だけメインコンテンツを下げる
 }
 </style>

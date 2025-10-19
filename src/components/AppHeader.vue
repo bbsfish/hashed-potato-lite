@@ -26,6 +26,7 @@ export default {
     IconChevronUp,
     IconGear,
   },
+  emits: ['hidden', 'open'],
   data() {
     return {
       isHidden: false,
@@ -37,6 +38,8 @@ export default {
   methods: {
     toggleHeader() {
       this.isHidden = !this.isHidden;
+      if (this.isHidden) this.$emits('hidden');
+      else this.$emits('open');
     },
   },
 };

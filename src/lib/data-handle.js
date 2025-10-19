@@ -5,15 +5,16 @@ const alwaysArray = [
   'root.head.options.column_alias.col',
   'root.head.options.column_order.col',
   'root.head.options.invisible_columns.col',
-  'root.body.sequence.table',
-  'sequence.table',
+  'root.body.sequence.ac',
+  'sequence.ac',
   'root.body.tables.table',
   'tables.table',
-  'root.body.tables.table.tbody.ac',
+].concat(...alwaysArrayInBody, ...alwaysArrayInBody.map((t) => `root.body.${t}`));
+
+// 指定タグと、先頭に 'root.body.' がつけられたものの両方が指定される
+const alwaysArrayInBody = [
   'tables.table.tbody.ac',
-  'root.body.tables.table.tbody.ac.em',
   'tables.table.tbody.ac.em',
-  'root.body.tables.table.tbody.ac.pw',
   'tables.table.tbody.ac.pw',
 ];
 
@@ -205,34 +206,42 @@ async function decrypt(cipher, iv, salt, password, additionalAuthenticatedData) 
  */
 class DataHandle {
   /**
-   * @param {object} [parsedXmlData=null] - パースされた XML データ、未指定の場合は新規作成
+   * @param {object} [data=null] - パースされた XML データ。未指定の場合は新規作成
    * @param {Uint8Array} saltBase64 - 復号に使用するソルト
    */
-  constructor(parsedXmlData = null) {
+  constructor(data = null) {
     // 新規作成時は、データを初期化して終了
-    if (!parsedXmlData) {
-      this.data = this._createInitialData();
-      return;
-    }
-    // データが注入されたらそのまま代入する
-    else {
-      this.data = parsedXmlData;
-    }
+    this.data = (data) ? data : this._createInitialData();
     console.debug('[DataHandle] data at creating instance:', this.data);
   }
 
-  static isEncryptedXml(xmlString) {
-    const data = fxp.parser.parse(xmlString);
+  /**
+   * ファイルの暗号化がオンかどうかを XML から静的に検査する
+   * @param {string} xml 検査する XML 文字列
+   * @return {boolean} 結果
+   */
+  static isEncryptedXml(xml) {
+    const data = fxp.parser.parse(xml);
     return (data?.root?.head?.is_encrypted) ? true : false;
   }
 
-  static isPlainXml(xmlString) {
-    const data = fxp.parser.parse(xmlString);
+  /**
+   * ファイルの暗号化がオフかどうかを XML から静的に検査する
+   * @param {string} xml 検査する XML 文字列
+   * @return {boolean} 結果
+   */
+  static isPlainXml(xml) {
+    const data = fxp.parser.parse(xml);
     return (data?.root?.head?.is_encrypted) ? false : true;
   }
 
-  static getFileIdFromXml(xmlString) {
-    const data = fxp.parser.parse(xmlString);
+  /**
+   * ファイル ID を XML から静的に取得する
+   * @param {string} xml 対象となる XML 文字列 
+   * @return {boolean} ファイル ID
+   */
+  static getFileIdFromXml(xml) {
+    const data = fxp.parser.parse(xml);
     return data?.root?.head?.file_id || null;
   }
 
@@ -346,7 +355,7 @@ class DataHandle {
           },
         },
         body: {
-          sequence: { table: [] },
+          sequence: { ac: [] },
           tables: { table: [] },
         },
       },
@@ -379,19 +388,12 @@ class HeadData extends DataHandle {
   constructor(data) {
     super(data);
     this.head = this.data.root.head;
-    console.debug('[DataHandle.HeadData] data at creating instance:', this.data);
   }
 
   // 各プロパティのゲッターとセッター
   get fileId() { return this.head.file_id; }
   get fileSId() { return 'S' + uuidToBase58(this.head.file_id.replace('HPL-', '')); }
-  get fileVersion() {
-    const ver = String(this.data.root.head.file_version);
-    // バージョン形式が X の場合は小数部分に 0 を付与して X.0 に変換
-    if (ver.match(/^\d+$/)) return `${ver}.0`;
-    // バージョン形式が X.Y の場合はそのまま返す
-    return ver;
-  }
+  get fileVersion() { return this.data.root.head.file_version; }
   set fileVersion(v) { this.head.file_version = v; }
   get fileSystemVersion() { return Number(this.fileVersion.split('.')[0].replace('v', '')); }
   get fileLocalVersion() { return Number(this.fileVersion.split('.')[1]); }
@@ -422,96 +424,85 @@ class OptionsData extends HeadData {
   constructor(data) {
     super(data);
     this.options = this.data.root.head.options;
+    // 必須の要素がない場合は初期化する
+    if (!this.options.column_alias) this.options.column_alias = { col: [] };
+    if (!this.options.column_alias.col) this.options.column_alias.col = [];
+    if (!this.options.column_order) this.options.column_order.col = { col: [] };
+    if (!this.options.column_order.col) this.options.column_order.col = [];
+    if (!this.options.invisible_columns) this.options.invisible_columns = { col: [] };
+    if (!this.options.invisible_columns.col) this.options.invisible_columns.col = [];
   }
 
-  get columnAlias() {
-    // column_alias が設定されている場合、既定の形式にフォーマットして返す
-    if (this.options.column_alias.col) {
-      return this.options.column_alias.col.map((c) => ({ id: c._id, alias: c['#text'] }));
-    };
-    // それ以外は空配列を返す
-    return [];
-  }
-  get columnOrder() {
-    // column_order が設定されている場合はそのまま返す。それ以外は空配列を返す
-    return this.options.column_order.col || [];
-  }
-  get invisibleColumns() {
-    // invisible_columns が設定されている場合はそのまま返す。それ以外は空配列を返す
-    return this.options.invisible_columns.col || [];
-  }
-
+  get columnAlias() { return this.options.column_alias.col.map((c) => ({ id: c._id, alias: c['#text'] })); }
+  /**
+   * @param {{id: ('sn'|'it'|'nm'|'ct'|'sm'|'em_count'|'pw_count'), alias: string}[]} arr 新しいエイリアス設定オブジェクト
+   */
+  set columnAlias(arr) { this.options.column_alias.col = arr.map((c) => ({ _id: c.id, '#text': c.alias })); }
+  get columnOrder() { return this.options.column_order.col; }
+  /**
+   * @param {('sn'|'it'|'nm'|'ct'|'sm'|'em_count'|'pw_count')[]} arr 新しいカラム順序設定の配列
+   */
+  set columnOrder(arr) { this.options.column_order.col = arr; }
+  get invisibleColumns() { return this.options.invisible_columns.col }
+  /**
+   * @param {('sn'|'it'|'nm'|'ct'|'sm'|'em_count'|'pw_count')[]} arr 新しいカラム非表示設定の配列
+   */
+  set invisibleColumns(arr) { this.options.invisible_columns.col = arr; }
   /**
    * エイリアス名を設定する
-   * @param {{id: string, alias: string}} data 設定するカラム ID とエイリアス 
+   * @param {('sn'|'it'|'nm'|'ct'|'sm'|'em_count'|'pw_count')} id 設定するカラム ID
+   * @param {string} alias 設定するエイリアス名
    */
-  setColumnAlias({ id, aliasText }) {
+  setColumnAlias(id, alias) {
     // 設定が存在するかチェック
-    const index = this.columnAlias.findIndex((c) => c.id === id);
+    const i = this.columnAlias.findIndex((c) => c.id === id);
     // 存在しない場合は追加して、存在する場合は上書き
-    if (index === -1) this.head.options.column_alias.col.push({ _id: id, '#text': aliasText });
-    else this.head.options.column_alias.col[index]['#text'] = aliasText;
+    if (i === -1) this.options.column_alias.col.push({ _id: id, '#text': alias });
+    else this.options.column_alias.col[i]['#text'] = alias;
   }
 
   /**
    * エイリアス名を削除する
-   * @param {string} id 削除するカラム ID 
+   * @param {('sn'|'it'|'nm'|'ct'|'sm'|'em_count'|'pw_count')} id 削除するカラム ID 
    */
   removeColumnAlias(id) {
-    this.head.options.column_alias.col = this.columnAlias.filter((c) => c.id !== id);
+    this.options.column_alias.col = this.columnAlias.filter((c) => c.id !== id);
   }
 
   /**
-   * エイリアス名を全て削除する
-   */
-  clearColumnAlias() { this.head.options.column_alias.col = []; }
-
-  /**
-   * カラムの順番を設定する
-   * @param {string[]} order カラム ID の配列
-   */
-  setColumnOrder(order) { this.head.options.column_order.col = order; }
-
-  /**
-   * カラムの順番設定をすべて削除する
-   */
-  clearColumnOrder() { this.head.options.column_order.col = []; }
-
-  /**
    * 非表示カラムを設定する
-   * @param {string} id 非表示にするカラム ID
+   * @param {('sn'|'it'|'nm'|'ct'|'sm'|'em_count'|'pw_count')} id 非表示にするカラム ID
    */
   setInvisibleColumn(id) {
     // 設定が存在するかチェック
-    const index = this.invisibleColumns.findIndex((c) => c === id);
+    const i = this.invisibleColumns.findIndex((c) => c === id);
     // 存在しない場合のみ追加
-    if (index === -1) this.head.options.invisible_columns.col.push(id);
+    if (i === -1) this.options.invisible_columns.col.push(id);
   }
 
   /**
    * カラムの非表示設定を削除する
-   * @param {string} id 再表示にするカラム ID
+   * @param {('sn'|'it'|'nm'|'ct'|'sm'|'em_count'|'pw_count')} id 再表示にするカラム ID
    */
   removeInvisibleColumn(id) {
-    this.head.options.invisible_columns.col = this.invisibleColumns.filter((c) => c !== id);
+    this.options.invisible_columns.col = this.invisibleColumns.filter((c) => c !== id);
   }
-
-  /**
-   * 非表示カラムの設定をすべて削除する
-   */
-  clearInvisibleColumns() { this.head.options.invisible_columns.col = []; }
 }
 
 /**
  * @class BodyData
- * @description XMLのbody部分を操作するクラス
+ * @description XML の body 部分を操作するクラス
  * @extends DataHandle
  */
 class BodyData extends DataHandle {
   constructor(data) {
     super(data);
     this.body = this.data.root.body;
-    console.debug('[DataHandle.BodyData] data at creating instance:', this.data);
+    // 必須の要素がない場合は初期化する
+    if (!this.body.sequence) this.body.sequence = { ac: [] };
+    if (!this.body.sequence.ac) this.body.sequence.ac = [];
+    if (!this.body.tables) this.body.tables = { table: [] };
+    if (!this.body.tables.table) this.body.tables.table = [];
   }
 
   /**
@@ -521,12 +512,6 @@ class BodyData extends DataHandle {
    * @returns {TableData} 追加されたテーブルの TableData インスタンス
    */
   addTable(tableName = '', tableSummary = '') {
-    // sequence.table および tables.table が存在しない場合は初期化する
-    if (!this.body.sequence) this.body.sequence = { table: [] };
-    if (!this.body.sequence.table) this.body.sequence.table = [];
-    if (!this.body.tables) this.body.tables = { table: [] };
-    if (!this.body.tables.table) this.body.tables.table = [];
-
     const now = getISOString();
 
     // 一意のテーブル ID が生成されるまで繰り返す
@@ -548,8 +533,18 @@ class BodyData extends DataHandle {
 
     this.body.tables.table.push(newTable);
     this.body.sequence.table.push({ _id: tableId, '#text': 0 });
+    this.data.root.head.updated_at = now; // ファイルの更新日時を更新
 
     return new TableData(this.data, tableId);
+  }
+
+  /**
+   * 指定したテーブルを削除
+   * @param {string} tableId 削除したいテーブルの ID 
+   */
+  removeTable(tableId) {
+    this.body.tables.table = this.body.tables.table.filter((t) => t.thead.id !== tableId);
+    this.data.root.head.updated_at = getISOString(); // ファイルの更新日時を更新
   }
 
   /**
@@ -567,21 +562,7 @@ class BodyData extends DataHandle {
    * @returns {TableData[]}
    */
   getTables() {
-    return (this.body.sequence.table || []).map((t) => new TableData(this.data, t._id));
-  }
-
-  /**
-   * テーブルの新しいシリアル番号を取得し、更新する
-   * @param {string} tableId 
-   * @returns {number}
-   */
-  _getNewSerialNumber(tableId) {
-    const seq = this.body.sequence.table.find((t) => t._id === tableId);
-    if (seq) {
-      seq['#text'] += 1;
-      return seq['#text'];
-    }
-    throw new Error(`Sequence for table ID '${tableId}' not found.`);
+    return this.body.sequence.table.map((t) => new TableData(this.data, t._id));
   }
 }
 
@@ -593,16 +574,27 @@ class BodyData extends DataHandle {
 class TableData extends BodyData {
   constructor(data, tableId) {
     super(data);
-    this.tableId = tableId;
-    this.table = this.body.tables.table.find((t) => t.thead.id === tableId);
+    this.id = tableId;
+    this.table = this.data.root.body.tables.table.find((t) => t.thead.id === tableId);
     if (!this.table) {
       throw new Error(`Table with ID '${tableId}' not found.`);
     }
   }
 
   /**
+   * テーブルの新しいシリアル番号を取得し、更新する
+   * @param {string} tableId 
+   * @returns {number}
+   */
+  _getNewSerialNumber() {
+    const seq = this.data.root.body.sequence.ac.find((t) => t._id === this.id);
+    seq['#text'] += 1;
+    return seq['#text'];
+  }
+
+  /**
    * アカウントを追加する
-   * @param {object} accountInfo - アカウント情報
+   * @param {object} accountInfo - アカウント情報。nm、it、ct、sm、stフィールドは必須
    * @returns {AccountData}
    */
   addAccount(accountInfo) {
@@ -614,7 +606,7 @@ class TableData extends BodyData {
     }
 
     const now = getISOString();
-    const newSn = this._getNewSerialNumber(this.tableId);
+    const newSn = this._getNewSerialNumber();
 
     const newAccount = {
       sn: newSn,
@@ -625,8 +617,9 @@ class TableData extends BodyData {
 
     this.table.tbody.ac.push(newAccount);
     this.table.thead.ua = now; // テーブルの更新日時を更新
+    this.data.root.head.updated_at = now; // ファイルの更新日時を更新
 
-    return new AccountData(this.data, this.tableId, newSn);
+    return new AccountData(this.data, this.id, newSn);
   }
 
   /**
@@ -636,7 +629,7 @@ class TableData extends BodyData {
    */
   getAccountBySn(sn) {
     const accountExists = this.table.tbody.ac.some((a) => a.sn === sn);
-    return accountExists ? new AccountData(this.data, this.tableId, sn) : null;
+    return accountExists ? new AccountData(this.data, this.id, sn) : null;
   }
 
   /**
@@ -644,21 +637,24 @@ class TableData extends BodyData {
    * @returns {AccountData[]}
    */
   getAccounts() {
-    return this.table.tbody.ac.map((a) => new AccountData(this.data, this.tableId, a.sn)) || [];
+    return this.table.tbody.ac.map((a) => new AccountData(this.data, this.id, a.sn));
   }
 
   // テーブルメタデータのゲッター
   get name() { return this.table.thead.nm; }
-  set name(newName) {
-    this.table.thead.nm = newName;
-    this.table.thead.ua = getISOString();
+  set name(str) {
+    const now = getISOString();
+    this.table.thead.nm = str;
+    this.table.thead.ua = now;
+    this.data.root.head.updated_at = now;
   }
   get summary() { return this.table.thead.sm; }
-    set summary(newSummary) {
-    this.table.thead.sm = newSummary;
-    this.table.thead.ua = getISOString();
+  set summary(str) {
+    const now = getISOString();
+    this.table.thead.sm = str;
+    this.table.thead.ua = now;
+    this.data.root.head.updated_at = now;
   }
-  get id() { return this.table.thead.id; }
   get createdAt() { return this.table.thead.ca; }
   get updatedAt() { return this.table.thead.ua; }
 }
@@ -669,9 +665,10 @@ class TableData extends BodyData {
  * @extends TableData
  */
 class AccountData extends TableData {
-  constructor(data, tableId, sn) {
-    super(data, tableId);
+  constructor(data, id, sn) {
+    super(data, id);
     this.sn = sn;
+    this.table = this.data.root.body.tables.table.find((t) => t.thead.id === id);
     this.account = this.table.tbody.ac.find((a) => a.sn === sn);
     if (!this.account) {
       throw new Error(`Account with SN '${sn}' not found in table '${tableId}'.`);
@@ -680,13 +677,17 @@ class AccountData extends TableData {
 
   /**
    * アカウントデータを更新する
-   * @param {object} newInfo - 更新する情報
+   * @param {object} newInfo - 更新する情報。nm、it、ct、sm、stフィールドは必須
    */
   update(newInfo) {
+    const requiredFields = ['nm', 'it', 'ct', 'sm', 'st'];
+    for (const field of requiredFields) {
+      if (!newInfo.hasOwnProperty(field)) {
+        throw new Error(`Missing required field in account data: ${field}`);
+      }
+    }
     Object.assign(this.account, newInfo);
-    const now = getISOString();
-    this.account.ua = now;      // アカウントの更新日時を更新
-    this.table.thead.ua = now;  // テーブルの更新日時を更新
+    this.table.thead.ua = now; // テーブルの更新日時を更新
   }
 
   /**
