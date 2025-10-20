@@ -6,6 +6,10 @@ export default createStore({
     dataHandle: null,
     isModified: false,
     clientPassword: null,
+    editor: {
+      tableId: null,
+      sn: null,
+    },
   },
   getters: {
     fileHandle: (state) => state.fileHandle,
@@ -13,6 +17,7 @@ export default createStore({
     isModified: (state) => state.isModified,
     clientPassword: (state) => state.clientPassword,
     isClientPasswordSet: (state) => state.clientPassword !== null,
+    editor: (state) => state.editor,
   },
   mutations: {
     setFileHandle(state, { handle, isOverwrite = false }) {
@@ -28,6 +33,7 @@ export default createStore({
       if (state.clientPassword !== null && !isOverwrite) return console.warn('Client Password is already set. Use isOverwrite=true to overwrite it');
       state.clientPassword = pw;
     },
+    setEditor(state, { tableId, sn }) { Object(state.editor, { tableId, sn }); },
   },
   actions: {
   },

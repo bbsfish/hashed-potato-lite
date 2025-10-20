@@ -1,5 +1,12 @@
 import { XMLParser, XMLBuilder } from 'fast-xml-parser';
 
+// 指定タグと、先頭に 'root.body.' がつけられたものの両方が指定される
+const alwaysArrayInBody = [
+  'tables.table.tbody.ac',
+  'tables.table.tbody.ac.em',
+  'tables.table.tbody.ac.pw',
+];
+
 // 常に配列としてパースする XML タグの一覧
 const alwaysArray = [
   'root.head.options.column_alias.col',
@@ -10,13 +17,6 @@ const alwaysArray = [
   'root.body.tables.table',
   'tables.table',
 ].concat(...alwaysArrayInBody, ...alwaysArrayInBody.map((t) => `root.body.${t}`));
-
-// 指定タグと、先頭に 'root.body.' がつけられたものの両方が指定される
-const alwaysArrayInBody = [
-  'tables.table.tbody.ac',
-  'tables.table.tbody.ac.em',
-  'tables.table.tbody.ac.pw',
-];
 
 // XML パーサーとビルダーのオプション設定およびインスタンス
 const fxp = {
@@ -322,7 +322,6 @@ class DataHandle {
     };
     const exportXml = fxp.builder.build(exportData);
 
-    console.debug('DataHandle.data[4]', exportXml);
     // 4. XML、iv（Base64）、salt（Base64）を返す
     return {
       xml: exportXml,
@@ -553,7 +552,7 @@ class BodyData extends DataHandle {
    * @returns {TableData|null}
    */
   getTableById(tableId) {
-    const tableExists = this.body.sequence.table.some((t) => t._id === tableId);
+    const tableExists = this.body.sequence.ac.some((t) => t._id === tableId);
     return tableExists ? new TableData(this.data, tableId) : null;
   }
 
@@ -562,7 +561,7 @@ class BodyData extends DataHandle {
    * @returns {TableData[]}
    */
   getTables() {
-    return this.body.sequence.table.map((t) => new TableData(this.data, t._id));
+    return this.body.sequence.ac.map((t) => new TableData(this.data, t._id));
   }
 }
 
@@ -695,7 +694,13 @@ class AccountData extends TableData {
    * @returns {object}
    */
   getData() {
-    return this.account;
+    const ua = new Date(this.account.ua);
+    const ca = new Date(this.account.ca);
+    return {
+      ...this.account,
+      ua,
+      ca,
+    };
   }
 
   // 各プロパティのゲッター

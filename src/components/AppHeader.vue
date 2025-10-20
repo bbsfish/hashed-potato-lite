@@ -38,8 +38,8 @@ export default {
   methods: {
     toggleHeader() {
       this.isHidden = !this.isHidden;
-      if (this.isHidden) this.$emits('hidden');
-      else this.$emits('open');
+      if (this.isHidden) this.$emit('hidden');
+      else this.$emit('open');
     },
   },
 };
