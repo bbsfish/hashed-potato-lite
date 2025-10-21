@@ -5,6 +5,20 @@ const alwaysArrayInBody = [
   'tables.table.tbody.ac',
   'tables.table.tbody.ac.em',
   'tables.table.tbody.ac.pw',
+  'tables.table.tbody.ac.nickname',
+  'tables.table.tbody.ac.ui',
+  'tables.table.tbody.ac.website',
+  'tables.table.tbody.ac.phonenumber',
+  'tables.table.tbody.ac.birthday',
+  'tables.table.tbody.ac.address',
+  'tables.table.tbody.ac.legal_name',
+  'tables.table.tbody.ac.bank',
+  'tables.table.tbody.ac.credit',
+  'tables.table.tbody.ac.memo',
+  'tables.table.tbody.ac.code',
+  'tables.table.tbody.ac.number',
+  'tables.table.tbody.ac.text',
+  'tables.table.tbody.ac.link',
 ];
 
 // 常に配列としてパースする XML タグの一覧
@@ -517,7 +531,7 @@ class BodyData extends DataHandle {
     let tableId = '';
     do {
       tableId = `TBL-${String(getRandomInt(1000, 9999))}`;
-    } while (this.body.sequence.table.some((t) => t._id === tableId));
+    } while (this.body.sequence.ac.some((t) => t._id === tableId));
 
     const newTable = {
       thead: {
@@ -531,7 +545,7 @@ class BodyData extends DataHandle {
     };
 
     this.body.tables.table.push(newTable);
-    this.body.sequence.table.push({ _id: tableId, '#text': 0 });
+    this.body.sequence.ac.push({ _id: tableId, '#text': 0 });
     this.data.root.head.updated_at = now; // ファイルの更新日時を更新
 
     return new TableData(this.data, tableId);
@@ -639,6 +653,14 @@ class TableData extends BodyData {
     return this.table.tbody.ac.map((a) => new AccountData(this.data, this.id, a.sn));
   }
 
+  /**
+   * アカウントを削除する
+   * @param {number} sn アカウントのシリアルナンバー
+   */
+  removeAccount(sn) {
+    this.table.tbody.ac = this.table.tbody.ac.filter((a) => a.sn !== sn);
+  }
+
   // テーブルメタデータのゲッター
   get name() { return this.table.thead.nm; }
   set name(str) {
@@ -670,7 +692,7 @@ class AccountData extends TableData {
     this.table = this.data.root.body.tables.table.find((t) => t.thead.id === id);
     this.account = this.table.tbody.ac.find((a) => a.sn === sn);
     if (!this.account) {
-      throw new Error(`Account with SN '${sn}' not found in table '${tableId}'.`);
+      throw new Error(`Account with SN '${sn}' not found in table '${tableId}'`);
     }
   }
 
@@ -686,7 +708,7 @@ class AccountData extends TableData {
       }
     }
     Object.assign(this.account, newInfo);
-    this.table.thead.ua = now; // テーブルの更新日時を更新
+    this.table.thead.ua = getISOString(); // テーブルの更新日時を更新
   }
 
   /**
@@ -703,16 +725,56 @@ class AccountData extends TableData {
     };
   }
 
-  // 各プロパティのゲッター
+  // 各プロパティのゲッターとセッター - 固有のもの
   get serialNumber() { return this.account.sn; }
-  get serviceName() { return this.account.nm; }
-  get initial() { return this.account.it; }
-  get category() { return this.account.ct; }
-  get summary() { return this.account.sm; }
-  get status() { return this.account.st; }
   get createdAt() { return this.account.ca; }
   get updatedAt() { return this.account.ua; }
-  // ... 必要に応じて他のプロパティのゲッターを追加
+  get serviceName() { return this.account.nm; }
+  set serviceName(v) { this.account.nm = v; }
+  get initial() { return this.account.it; }
+  set initial(v) { this.account.it = v; }
+  get category() { return this.account.ct; }
+  set category(v) { this.account.ct = v; }
+  get subCategory() { return this.account.sct; }
+  set subCategory(v) { this.account.sct = v; }
+  get summary() { return this.account.sm; }
+  set summary(v) { this.account.sm = v; }
+  get status() { return this.account.st; }
+  set status(v) { this.account.st = v; }
+
+  // 各プロパティのゲッターとセッター - 複数のもの
+  get nickname() { return this.account.nickname ?? []; }
+  set nickname(arr) { this.account.nickname = arr; }
+  get userId() { return this.account.ui ?? []; }
+  set userId(arr) { this.account.ui = arr; }
+  get email() { return this.account.em ?? []; }
+  set email(arr) { this.account.em = arr; }
+  get password() { return this.account.pw ?? []; }
+  set password(arr) { this.account.pw = arr; }
+  get website() { return this.account.website ?? []; }
+  set website(arr) { this.account.website = arr; }
+  get phonenumber() { return this.account.phonenumber ?? []; }
+  set phonenumber(arr) { this.account.phonenumber = arr; }
+  get birthday() { return this.account.birthday ?? []; }
+  set birthday(arr) { this.account.birthday = arr; }
+  get address() { return this.account.address ?? []; }
+  set address(arr) { this.account.address = arr; }
+  get legalName() { return this.account.legal_name ?? []; }
+  set legalName(arr) { this.account.legalName = arr; }
+  get bank() { return this.account.bank ?? []; }
+  set bank(arr) { this.account.bank = arr; }
+  get credit() { return this.account.credit ?? []; }
+  set credit(arr) { this.account.credit = arr; }
+  get memo() { return this.account.memo ?? []; }
+  set memo(arr) { this.account.memo = arr; }
+  get code() { return this.account.code ?? []; }
+  set code(arr) { this.account.code = arr; }
+  get number() { return this.account.number ?? []; }
+  set number(arr) { this.account.number = arr; }
+  get text() { return this.account.text ?? []; }
+  set text(arr) { this.account.text = arr; }
+  get link() { return this.account.link ?? []; }
+  set link(arr) { this.account.link = arr; }
 }
 
 export {

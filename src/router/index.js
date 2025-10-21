@@ -5,6 +5,7 @@ import DevicesView from '@/views/DevicesView.vue';
 import FileConfigView from '@/views/FileConfigView.vue';
 import FileEncryptionView from '@/views/FileEncryptionView.vue';
 import FileEditorView from '@/views/FileEditorView.vue';
+import AccountDetailsView from '@/views/AccountDetailsView.vue';
 
 const routes = [
   {
@@ -36,6 +37,11 @@ const routes = [
     path: '/file-editor',
     name: 'FileEditor',
     component: FileEditorView,
+  },
+  {
+    path: '/account-details',
+    name: 'AccountDetails',
+    component: AccountDetailsView,
   }
 ];
 
